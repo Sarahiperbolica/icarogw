@@ -5,6 +5,7 @@ from .priors import LowpassSmoothedProb, LowpassSmoothedProbEvolving, PowerLaw, 
 from .priors import  EvolvingPowerLawPeak, PowerLawGaussian, BrokenPowerLaw, PowerLawTwoGaussians, absL_PL_inM, conditional_2dimpdf, conditional_2dimz_pdf, piecewise_constant_2d_distribution_normalized,paired_2dimpdf
 from .priors import _lowpass_filter, _mixed_sigmoid_function, _mixed_double_sigmoid_function, _mixed_linear_function, _mixed_linear_sinusoid_function
 import copy
+from .PBH_spin_dists import chi1_analytical_fit, chi2_analytical_fit
 from astropy.cosmology import FlatLambdaCDM, FlatwCDM
 
 
@@ -797,9 +798,51 @@ class spinprior_gaussian(object):
     def pdf(self,chi_eff,chi_p):
         xp = get_module_array(chi_eff)
         return xp.exp(self.log_pdf(chi_eff,chi_p))
+
+class spinprior_ECOs_totally_reflective(object):
+    def __init__(self,q=1.):
+        # q=1 is the polar case, q = 2 is the axial case, m=2 fixed
+        self.q=q
+        self.population_parameters=['alpha_chi','beta_chi','eps', 'f_eco', 'sigma_chi_ECO']
+        self.event_parameters=['chi_1','chi_2'] 
+        self.name='DEFAULT'
+        
+    def get_chi_crit(self, eps):
+        xp = get_module_array(eps)   
+        return xp.pi*(1.+self.q)/(2*xp.abs(xp.log(eps)))
+
+    def update(self,**kwargs):
+        self.alpha_chi = kwargs['alpha_chi']
+        self.beta_chi = kwargs['beta_chi']
+        self.eps = kwargs['eps']
+        self.f_eco = kwargs['f_eco']
+        self.sigma = kwargs['sigma_chi_ECO']
+        self.chi_crit = self.get_chi_crit(self.eps)
+        if (self.alpha_chi <= 1) | (self.beta_chi <= 1) :
+            raise ValueError('Alpha and Beta must be > 1') 
+            
+        self.beta_pdf = BetaDistribution(self.alpha_chi,self.beta_chi)
+        self.truncatedbeta_pdf = TruncatedBetaDistribution(self.alpha_chi,self.beta_chi,self.chi_crit)
+        self.truncatedgaussian_pdf = TruncatedGaussian(self.chi_crit, self.sigma, 0., self.chi_crit)
+        self.lambda_eco = 1-self.beta_pdf.cdf(np.array([self.get_chi_crit(self.eps)]))[0]
+        
+        
+    def pdf(self,chi_1,chi_2):
+        p_chi_1 = self.f_eco*((1-self.lambda_eco)*self.truncatedbeta_pdf.pdf(chi_1) + self.lambda_eco*self.truncatedgaussian_pdf.pdf(chi_1)) + (1-self.f_eco)*self.beta_pdf.pdf(chi_1) 
+        p_chi_2 = self.f_eco*((1-self.lambda_eco)*self.truncatedbeta_pdf.pdf(chi_2) + self.lambda_eco*self.truncatedgaussian_pdf.pdf(chi_2)) + (1-self.f_eco)*self.beta_pdf.pdf(chi_2) 
+        return p_chi_1*p_chi_2
+        
+        
+    def log_pdf(self,chi_1,chi_2):
+        xp = get_module_array(chi_1)
+        return xp.log(self.pdf(chi_1,chi_2))
     
+
+   
+# ABH pop pdf: correlated gaussian -> correlated gaussian
 class spinprior_default_corr_gaussian_window_corr_gaussian(object):
     def __init__(self):
+
         # Population parameters
         self.population_parameters = [
             'Mt', 'delta_Mt', 'mix_f_M',
@@ -861,42 +904,56 @@ class spinprior_default_corr_gaussian_window_corr_gaussian(object):
         xp = get_module_array(chi_eff)
         return xp.exp(self.log_pdf(chi_eff,chi_p, mass_1_source,mass_2_source))
     
-      
-class spinprior_ECOs_totally_reflective(object):
-    def __init__(self,q=1.):
-        # q=1 is the polar case, q = 2 is the axial case, m=2 fixed
-        self.q=q
-        self.population_parameters=['alpha_chi','beta_chi','eps', 'f_eco', 'sigma_chi_ECO']
-        self.event_parameters=['chi_1','chi_2'] 
-        self.name='DEFAULT'
-        
-    def get_chi_crit(self, eps):
-        xp = get_module_array(eps)   
-        return xp.pi*(1.+self.q)/(2*xp.abs(xp.log(eps)))
+
+# PBH pop pdf: gaussian on chi_1, chi_2 with small sigma and mean value dependent from the masses    
+class spinprior_default_beta_window_gaussian(object):
+    def __init__(self):
+
+        #population parameters
+        self.population_parameters= ['mu_chi_1', 'mu_chi_2', 'sigma_chi_1', 'sigma_chi_2']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2']
+    
+        # Initialize smeared Gaussians for chi_1, chi_2
+        self.name='PBH_distribution_smearing'
 
     def update(self,**kwargs):
-        self.alpha_chi = kwargs['alpha_chi']
-        self.beta_chi = kwargs['beta_chi']
-        self.eps = kwargs['eps']
-        self.f_eco = kwargs['f_eco']
-        self.sigma = kwargs['sigma_chi_ECO']
-        self.chi_crit = self.get_chi_crit(self.eps)
-        if (self.alpha_chi <= 1) | (self.beta_chi <= 1) :
-            raise ValueError('Alpha and Beta must be > 1') 
-            
-        self.beta_pdf = BetaDistribution(self.alpha_chi,self.beta_chi)
-        self.truncatedbeta_pdf = TruncatedBetaDistribution(self.alpha_chi,self.beta_chi,self.chi_crit)
-        self.truncatedgaussian_pdf = TruncatedGaussian(self.chi_crit, self.sigma, 0., self.chi_crit)
-        self.lambda_eco = 1-self.beta_pdf.cdf(np.array([self.get_chi_crit(self.eps)]))[0]
         
-        
-    def pdf(self,chi_1,chi_2):
-        p_chi_1 = self.f_eco*((1-self.lambda_eco)*self.truncatedbeta_pdf.pdf(chi_1) + self.lambda_eco*self.truncatedgaussian_pdf.pdf(chi_1)) + (1-self.f_eco)*self.beta_pdf.pdf(chi_1) 
-        p_chi_2 = self.f_eco*((1-self.lambda_eco)*self.truncatedbeta_pdf.pdf(chi_2) + self.lambda_eco*self.truncatedgaussian_pdf.pdf(chi_2)) + (1-self.f_eco)*self.beta_pdf.pdf(chi_2) 
-        return p_chi_1*p_chi_2
-        
-        
-    def log_pdf(self,chi_1,chi_2):
+        self.sigma_chi_1 = kwargs['sigma_chi_1']
+        self.sigma_chi_2 = kwargs['sigma_chi_2']
+        self.csi_spin = kwargs['csi_spin']
+        self.aligned_pdf = TruncatedGaussian(1.,kwargs['sigma_t'],-1.,1.)
+
+    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co):
+
+        #choose module between numpy and cupy
         xp = get_module_array(chi_1)
-        return xp.log(self.pdf(chi_1,chi_2))
+        sx = get_module_array_scipy(chi_1)
+ 
+        #evolving means/sigmas (notice the dependence on the source frame mass)
+        q = mass_2_source/mass_1_source
+        mu_chi_1 = chi1_analytical_fit(mass_1_source, q, z_co)
+        sigma_chi_1 = self.sigma_chi_1
+        mu_chi_2 = chi1_analytical_fit(mass_1_source, q, z_co)
+        sigma_chi_2 = self.sigma_chi_2
+
+        #compute the truncated gaussian referred to chi1
+        a, b = (0. - mu_chi_1) / sigma_chi_1, (1. - mu_chi_1) / sigma_chi_1 
+        g1 = sx.stats.truncnorm.pdf(chi_1,a,b,loc=mu_chi_1,scale=sigma_chi_1)
+
+        #compute the truncated gaussian referred to chi2
+        a, b = (0. - mu_chi_2) / sigma_chi_2, (1. - mu_chi_2) / sigma_chi_2 
+        g2 = sx.stats.truncnorm.pdf(chi_2,a,b,loc=mu_chi_2,scale=sigma_chi_2)
+
+        #implement eq. 12 of https://arxiv.org/pdf/2406.01679 
+        log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
+                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
+
+        #log(p(chi1,chi2|m1,m2,Lambda))
+        out = xp.log(g1)+xp.log(g2)+log_angular_part
+        
+        return out
+        
+    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co))   
     
