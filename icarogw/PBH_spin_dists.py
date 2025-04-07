@@ -121,7 +121,7 @@ def fc2(zco, q):
 
 
 def chi1_analytical_fit(m1, q, zco):
-    return 0.01 + min(
+    return 0.01 + np.minimum(
         0.988,
         10 ** fb1(zco, q)
         * (np.absolute(m1 - fa1(zco, q))) ** fc1(zco, q)
@@ -130,7 +130,7 @@ def chi1_analytical_fit(m1, q, zco):
 
 
 def chi2_analytical_fit(m1, q, zco):
-    return 0.01 + min(
+    return 0.01 + np.minimum(
         0.988,
         10 ** fb2(zco, q)
         * (np.absolute(m1 - fa2(zco, q))) ** fc2(zco, q)
