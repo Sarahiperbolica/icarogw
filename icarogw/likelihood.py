@@ -5,6 +5,8 @@ import bilby
 import icarogw
 from .wrappers import FlatLambdaCDM_wrap
 
+test = 0
+
 # LVK Reviewed
 class hierarchical_likelihood(bilby.Likelihood):
     def __init__(self, posterior_samples_dict, injections, rate_model, nparallel=None, neffPE=20,neffINJ=None):
@@ -33,14 +35,14 @@ class hierarchical_likelihood(bilby.Likelihood):
         self.rate_model=rate_model
         self.posterior_samples_dict=posterior_samples_dict
         self.posterior_samples_dict.build_parallel_posterior(nparallel=nparallel)
-        
+  
         if neffINJ is None:
             self.neffINJ=4*self.posterior_samples_dict.n_ev
         else:
             self.neffINJ=neffINJ
             
         super().__init__(parameters={ll: None for ll in self.rate_model.population_parameters})
-                
+         
     def log_likelihood(self):
         '''
         Evaluates and return the log-likelihood
@@ -58,11 +60,15 @@ class hierarchical_likelihood(bilby.Likelihood):
         Neff=self.injections.effective_injections_number()
         # If the injections are not enough return 0, you cannot go to that point. This is done because the number of injections that you have
         # are not enough to calculate the selection effect
-        
+  
         xp = get_module_array(self.injections.log_weights)
-        
+
         if (Neff<self.neffINJ) | (Neff==0.):
-            return float(xp.nan_to_num(-xp.inf))
+
+            if test:
+                print(Neff, "<", self.neffINJ, "or Neff==0")
+                print("Not enough injections to evaluate the selection bias, returning -inf")
+                return float(xp.nan_to_num(-xp.inf))
         
         # Update the weights on the PE
         self.posterior_samples_dict.update_weights(self.rate_model)
@@ -74,12 +80,32 @@ class hierarchical_likelihood(bilby.Likelihood):
         # Combine all the terms  
         if self.rate_model.scale_free:
             # Log likelihood for scale free model, Eq. 1.3 on the document
+            if test:
+                print("lkhood scale free sanity check   ")
+                print("self.posterior_samples_dict.sum_weights", self.posterior_samples_dict.sum_weights)
+                print("self.injections.pseudo_rate", self.injections.pseudo_rate)
+                print("self.posterior_samples_dict.n_ev", self.posterior_samples_dict.n_ev)
+                print("self.injections.Tobs", self.injections.Tobs)
+                print("self.injections.expected_number_detections()", self.injections.expected_number_detections())
+                print("self.injections.log_weights", self.injections.log_weights)
+                print("self.injections.Tobs", self.injections.Tobs)
             log_likeli = xp.sum(xp.log(self.posterior_samples_dict.sum_weights))-self.posterior_samples_dict.n_ev*xp.log(self.injections.pseudo_rate)
+            print(f"\n\n\n\nlog likeli: {log_likeli}\n\n\n\n")
         else:
             Nexp=self.injections.expected_number_detections()
             # Log likelihood for  the model, Eq. 1.1 on the document
+
+            if test:
+                print("\n\n\nlkhood non scale free sanity check   ")
+                print("self.posterior_samples_dict.sum_weights", self.posterior_samples_dict.sum_weights)
+                print("self.injections.Tobs", self.injections.Tobs)
+                print("self.posterior_samples_dict.n_ev", self.posterior_samples_dict.n_ev)
+                print("self.injections.expected_number_detections()", self.injections.expected_number_detections())
+                print("Nexp", Nexp)
             log_likeli = -Nexp + self.posterior_samples_dict.n_ev*xp.log(self.injections.Tobs)+xp.sum(xp.log(self.posterior_samples_dict.sum_weights))
-        
+            if test:
+                print(f"\n\n\n\nlog likeli: {log_likeli}\n\n\n\n")
+
         # Controls on the value of the log-likelihood. If the log-likelihood is -inf, then set it to the smallest
         # python valye 1e-309
         if log_likeli == xp.inf:
@@ -89,7 +115,7 @@ class hierarchical_likelihood(bilby.Likelihood):
             log_likeli = float(xp.nan_to_num(-xp.inf))
         else:
             log_likeli = float(xp.nan_to_num(log_likeli))
-            
+
         return float(cp2np(log_likeli))
                 
 

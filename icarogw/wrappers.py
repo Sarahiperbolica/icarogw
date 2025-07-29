@@ -798,6 +798,8 @@ class spinprior_gaussian(object):
     def pdf(self,chi_eff,chi_p):
         xp = get_module_array(chi_eff)
         return xp.exp(self.log_pdf(chi_eff,chi_p))
+    def sample(self, N):
+        return self.pdf_evaluator.sample(N)
 
 class spinprior_ECOs_totally_reflective(object):
     def __init__(self,q=1.):
@@ -849,7 +851,7 @@ class spinprior_default_corr_gaussian_window_corr_gaussian(object):
             'mu_chi_eff_l', 'sigma_chi_eff_l', 'mu_chi_p_l', 'sigma_chi_p_l', 'rho_l',
             'mu_chi_eff_h', 'sigma_chi_eff_h', 'mu_chi_p_h', 'sigma_chi_p_h', 'rho_h'
         ]
-        self.event_parameters = ['chi_eff', 'chi_p', 'mass_1', 'mass_2']
+        self.event_parameters = ['chi_eff', 'chi_p']
 
         # Initialize Gaussian priors for low and high mass
         self.name='corr_gaussian_window_corr_gaussian'
@@ -905,13 +907,62 @@ class spinprior_default_corr_gaussian_window_corr_gaussian(object):
         return xp.exp(self.log_pdf(chi_eff,chi_p, mass_1_source,mass_2_source))
     
 
+    def sample(self, N, mass_1_source, mass_2_source):
+        """
+        Sample (chi_eff, chi_p) given mass_1_source and mass_2_source arrays.
+        
+        Parameters
+        ----------
+        N : int
+            Number of samples
+        mass_1_source, mass_2_source : array-like or float
+            Source-frame masses
+
+        Returns
+        -------
+        chi_eff_samples, chi_p_samples : arrays
+        """
+        xp = get_module_array(mass_1_source)
+        mass_1_source = xp.asarray(mass_1_source)
+        mass_2_source = xp.asarray(mass_2_source)
+
+        # Compute total mass
+        M = mass_1_source + mass_2_source
+
+        # Logistic weight between low and high Gaussians
+        wz_M = _mixed_sigmoid_function(M, self.Mt, self.delta_Mt, self.mix_f_M)
+
+        # Draw random uniform values to choose low/high Gaussian per sample
+        choose_low = xp.random.uniform(0, 1, size=N) < wz_M
+
+        # Allocate arrays
+        chi_eff_samples = xp.empty(N)
+        chi_p_samples = xp.empty(N)
+
+        # Sample from low and high components accordingly
+        n_low = xp.sum(choose_low)
+        n_high = N - n_low
+
+        if n_low > 0:
+            eff_l, p_l = self.gaussian_low.sample(n_low)
+            chi_eff_samples[choose_low] = eff_l
+            chi_p_samples[choose_low] = p_l
+
+        if n_high > 0:
+            eff_h, p_h = self.gaussian_high.sample(n_high)
+            chi_eff_samples[~choose_low] = eff_h
+            chi_p_samples[~choose_low] = p_h
+
+        return chi_eff_samples, chi_p_samples
+
+
 # PBH pop pdf: gaussian on chi_1, chi_2 with small sigma and mean value dependent from the masses    
 class spinprior_PBH_smeared(object):
     def __init__(self):
 
         #population parameters
         self.population_parameters= ['sigma_chi_1', 'sigma_chi_2', 'csi_spin', 'sigma_t']
-        self.event_parameters=['mass_1', 'mass_2', 'chi_1','chi_2','cost_1','cost_2']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2']
     
         # Initialize smeared Gaussians for chi_1, chi_2
         self.name='PBH_distribution_smearing'
@@ -923,38 +974,92 @@ class spinprior_PBH_smeared(object):
         self.csi_spin = kwargs['csi_spin']
         self.aligned_pdf = TruncatedGaussian(1.,kwargs['sigma_t'],-1.,1.)
 
-    def log_pdf(self,chi_1,chi_2,cost_1,cost_2,mass_1,mass_2,z_co=20):
+    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co=30):
 
         #choose module between numpy and cupy
         xp = get_module_array(chi_1)
         sx = get_module_array_scipy(chi_1)
  
-        #evolving means/sigmas (notice the dependence on the source frame mass)
-        q = mass_2/mass_1
-        mu_chi_1 = chi1_analytical_fit(mass_1, q, z_co)
+        q = mass_2_source/mass_1_source
+        mu_chi_1 = chi1_analytical_fit(mass_1_source, q, z_co)
         sigma_chi_1 = self.sigma_chi_1
-        mu_chi_2 = chi1_analytical_fit(mass_1, q, z_co)
+        mu_chi_2 = chi2_analytical_fit(mass_1_source, q, z_co)
         sigma_chi_2 = self.sigma_chi_2
 
         # Intervals
-        a, b = 0, 1 
+        a_1 = (0 - mu_chi_1) / sigma_chi_1
+        b_1 = (1 - mu_chi_1) / sigma_chi_1
+        a_2 = (0 - mu_chi_2) / sigma_chi_2
+        b_2 = (1 - mu_chi_2) / sigma_chi_2
 
-        # Compute the truncated gaussian referred to chi1
-        g1 = sx.stats.truncnorm.pdf(chi_1,a,b,loc=mu_chi_1,scale=sigma_chi_1)
+        # Safe evaluation of truncated Gaussians
+        g1 = sx.stats.truncnorm.pdf(chi_1, a_1, b_1, loc=mu_chi_1, scale=sigma_chi_1)
+        g2 = sx.stats.truncnorm.pdf(chi_2, a_2, b_2, loc=mu_chi_2, scale=sigma_chi_2)
 
-        # Compute the truncated gaussian referred to chi2
-        g2 = sx.stats.truncnorm.pdf(chi_2,a,b,loc=mu_chi_2,scale=sigma_chi_2)
+        print_i=0
+        if print_i==1:
+            #print(f"mu_chi_1: {mu_chi_1}, mu_chi_2: {mu_chi_2}, sigma_chi_1: {sigma_chi_1}, sigma_chi_2: {sigma_chi_2}")
+            #print(f"Intervals: a1={a_1}, b1={b_1}, a2={a_2}, b2={b_2}")
+            print(f"g1={g1}, g2={g2}")
 
         #implement eq. 12 of https://arxiv.org/pdf/2406.01679 
         log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
-                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cost_1)+self.aligned_pdf.log_pdf(cost_2))
+                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
 
         #log(p(chi1,chi2|m1,m2,Lambda))
         out = xp.log(g1)+xp.log(g2)+log_angular_part
         
+
+        #print(g1, g2, cost_1, cost_2, log_angular_part)
+
+        out = xp.log(g1) + xp.log(g2) + log_angular_part
+
         return out
         
-    def pdf(self,chi_1,chi_2,cost_1,cost_2,mass_1_source,mass_2_source,z_co):
+    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co):
         xp = get_module_array(chi_1)
-        return xp.exp(self.log_pdf(chi_1,chi_2,cost_1,cost_2,mass_1_source,mass_2_source,z_co))   
+        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co))   
     
+
+# IBH pop pdf: flat prior on chi and theta  
+class spinprior_IBH(object):
+    def __init__(self):
+        # Population-level parameters
+        self.population_parameters = ['delta', 'chi_max']
+        self.event_parameters = ['chi_1', 'chi_2', 'cos_t_1', 'cos_t_2']
+
+        # Label for the distribution
+        self.name = 'IBH_distribution'
+
+    def update(self, **kwargs):
+        self.delta = kwargs['delta']
+        self.chi_max = kwargs['chi_max']
+
+    def log_pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source):
+        # Select array module (NumPy or CuPy)
+        xp = get_module_array(chi_1)
+        sx = get_module_array_scipy(chi_1)
+
+        # Compute uniform PDFs for chi ∈ [0, chi_max]
+        u1 = sx.stats.uniform.pdf(chi_1, loc=0.0, scale=self.chi_max)
+        u2 = sx.stats.uniform.pdf(chi_2, loc=0.0, scale=self.chi_max)
+
+        # Compute log of uniform PDF for cosθ ∈ [1 - δ, 1]
+        log_angular_part = xp.log(
+            sx.stats.uniform.pdf(cos_t_1, loc=1 - self.delta, scale=self.delta)
+        ) + xp.log(
+            sx.stats.uniform.pdf(cos_t_2, loc=1 - self.delta, scale=self.delta)
+        )
+
+        print(u1, u2, log_angular_part)
+
+        # Combine logs: log[p(chi1) * p(chi2) * p(cos_t_1) * p(cos_t_2)]
+        out = xp.log(u1) + xp.log(u2) + log_angular_part
+
+        print(out)
+
+        return out
+
+    def pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source))
