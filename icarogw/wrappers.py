@@ -1679,9 +1679,10 @@ def log_tgaussian(x,xmin,xmax,mu,sigma):
                      )
     return toret
 
-
-
-
+def log_uniform(x,xmin,xmax):
+    xp = get_module_array(x)
+    out = xp.where((x>=xmin) & (x<=xmax),-xp.log(xmax-xmin),-xp.inf)
+    return out
 
 # PBH pop pdf: gaussian on chi_1, chi_2 with small sigma and mean value dependent from the masses    
 class spinprior_HBH(object):
@@ -1710,11 +1711,11 @@ class spinprior_HBH(object):
         #choose module between numpy and cupy
         xp = get_module_array(chi_1)
 
-        p1g1g = - xp.log(self.chi_max_1g) - xp.log(self.chi_max_1g) - xp.log(2.) - xp.log(2.)
+        p1g1g = log_uniform(chi_1,0.,self.chi_max_1g) + log_uniform(chi_2,0.,self.chi_max_1g) - xp.log(2.) - xp.log(2.)
         
-        p2g1g = log_tgaussian(chi_1,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) - xp.log(self.chi_max_1g) - xp.log(2.) - xp.log(2.)
+        p2g1g = log_tgaussian(chi_1,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) + log_uniform(chi_2,0.,self.chi_max_1g) - xp.log(2.) - xp.log(2.)
 
-        p1g2g = log_tgaussian(chi_2,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) - xp.log(self.chi_max_1g) - xp.log(2.) - xp.log(2.)
+        p1g2g = log_tgaussian(chi_2,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) + log_uniform(chi_1,0.,self.chi_max_1g) - xp.log(2.) - xp.log(2.)
 
         p2g2g = log_tgaussian(chi_2,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) + log_tgaussian(chi_1,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) - xp.log(2.) - xp.log(2.)
         
@@ -1796,12 +1797,16 @@ class spinprior_IBH(object):
         chi_IBH_max_2 = self.chi_IBH_0+self.chi_dot_IBH_0*(mass_2_source/30.)
 
         # Clip to minimal and maximum values for numerical stability
-        delta_1 = np.clip(delta_1,self.mindelta,1.)
-        delta_2 = np.clip(delta_2,self.mindelta,1.)
+        delta_1 = np.clip(delta_1,self.mindelta,2.)
+        delta_2 = np.clip(delta_2,self.mindelta,2.)
         chi_IBH_max_1 = np.clip(chi_IBH_max_1,self.minchi,1.)
         chi_IBH_max_2 = np.clip(chi_IBH_max_2,self.minchi,1.)
 
-        out = xp.log(0.5/delta_1) + xp.log(0.5/delta_2) + xp.log(1/chi_IBH_max_1) + xp.log(1/chi_IBH_max_2)
+        c1 = log_uniform(chi_1,0.,chi_IBH_max_1)
+        c2 = log_uniform(chi_2,0.,chi_IBH_max_2)
+        a1 = log_uniform(cos_t_1,1.-delta_1,1.)
+        a2 = log_uniform(cos_t_2,1.-delta_2,1.)
+        out = a1 + a2 + c1 + c2
 
         return out
 

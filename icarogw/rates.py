@@ -3,6 +3,78 @@ from .conversions import detector2source_jacobian, detector2source, detector2sou
 from scipy.stats import gaussian_kde
 from .wrappers import modgravity_wrappers, lcdm_wrappers
 
+class CBC_astro_rate_spin(object):
+    def __init__(self,cosmology_wrapper,mass_wrapper,rate_wrapper,spin_wrapper):
+        
+        self.cw = cosmology_wrapper
+        self.mw = mass_wrapper
+        self.rw = rate_wrapper
+        self.sw = spin_wrapper
+        self.scale_free = False
+        self.population_parameters =  self.cw.population_parameters+self.mw.population_parameters+self.rw.population_parameters + ['R0']
+            
+        event_parameters = ['mass_1', 'mass_2', 'luminosity_distance','chi_1','chi_2','cos_t_1','cos_t_2']
+     
+        self.PEs_parameters = event_parameters.copy()
+        self.injections_parameters = event_parameters.copy()
+            
+    def update(self,**kwargs):
+        self.cw.update(**{key: kwargs[key] for key in self.cw.population_parameters})
+        self.mw.update(**{key: kwargs[key] for key in self.mw.population_parameters})
+        self.rw.update(**{key: kwargs[key] for key in self.rw.population_parameters})
+        self.sw.update(**{key: kwargs[key] for key in self.sw.population_parameters})    
+        self.R0 = kwargs['R0']
+        
+    def log_rate_PE(self,prior,**kwargs):
+        xp = get_module_array(prior)
+        ms1, ms2, z = detector2source(kwargs['mass_1'],kwargs['mass_2'],kwargs['luminosity_distance'],self.cw.cosmology) 
+        log_dVc_dz=xp.log(self.cw.cosmology.dVc_by_dzdOmega_at_z(z)*4*xp.pi)
+        
+        # Sum over posterior samples in Eq. 1.1 on the icarogw2.0 document
+        log_weights=self.mw.log_pdf(ms1,ms2)+self.rw.rate.log_evaluate(z)+log_dVc_dz \
+        -xp.log(prior)-xp.log(detector2source_jacobian(z,self.cw.cosmology))-xp.log1p(z)
+        log_weights+=self.sw.log_pdf(kwargs['chi_1'],kwargs['chi_2'],
+                                     kwargs['cos_t_1'],kwargs['cos_t_2'],
+                                     ms1, ms2)
+            
+        log_out = log_weights + xp.log(self.R0)     
+        return log_out
+    
+    def log_rate_injections(self,prior,**kwargs):    
+        return self.log_rate_PE(prior,**kwargs)
+    
+class CBC_astro_rate_spin_3pops(object):
+    def __init__(self,IBH_rate,HBH_rate,PBH_rate):
+        self.scale_free = False
+        
+        self.IBH_rate = IBH_rate
+        self.HBH_rate = HBH_rate
+        self.PBH_rate = PBH_rate
+
+        mass_pars = [kk+'_IBH' for kk in IBH_rate.mw.population_parameters] + [kk+'_HBH' for kk in HBH_rate.mw.population_parameters] + [kk+'_PBH' for kk in PBH_rate.mw.population_parameters]
+        rate_pars = [kk+'_IBH' for kk in IBH_rate.rw.population_parameters] + [kk+'_HBH' for kk in HBH_rate.rw.population_parameters] + [kk+'_PBH' for kk in PBH_rate.rw.population_parameters]
+        spin_pars = [kk+'_IBH' for kk in IBH_rate.sw.population_parameters] + [kk+'_HBH' for kk in HBH_rate.sw.population_parameters] + [kk+'_PBH' for kk in PBH_rate.sw.population_parameters]
+
+        self.population_parameters =  IBH_rate.cw.population_parameters+mass_pars+rate_pars+spin_pars+['R0_IBH','R0_HBH','R0_PBH']
+            
+        event_parameters = ['mass_1', 'mass_2', 'luminosity_distance','chi_1','chi_2','cos_t_1','cos_t_2']
+     
+        self.PEs_parameters = event_parameters.copy()
+        self.injections_parameters = event_parameters.copy()
+            
+    def update(self,**kwargs):
+
+        self.IBH_rate.update(**{key.replace('_IBH',''): kwargs[key] for key in self.population_parameters})
+        self.HBH_rate.update(**{key.replace('_HBH',''): kwargs[key] for key in self.population_parameters})
+        self.PBH_rate.update(**{key.replace('_PBH',''): kwargs[key] for key in self.population_parameters})
+
+    def log_rate_PE(self,prior,**kwargs):
+        return self.IBH_rate.log_rate_PE(prior,**kwargs) + self.HBH_rate.log_rate_PE(prior,**kwargs) + self.PBH_rate.log_rate_PE(prior,**kwargs)  
+    
+    def log_rate_injections(self,prior,**kwargs):    
+        return self.log_rate_PE(prior,**kwargs)
+
+
 class CBC_rate_mchirp_q(object):
     '''
     This is a rate model that parametrizes the CBC rate per year at the detector in terms of source-frame
