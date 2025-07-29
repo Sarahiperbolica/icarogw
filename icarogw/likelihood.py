@@ -50,8 +50,9 @@ class hierarchical_likelihood(bilby.Likelihood):
             else:
                 self.neffINJ=neffINJ
         
+
         super().__init__(parameters={ll: None for ll in self.rate_model.population_parameters})
-                
+         
     def log_likelihood(self):
         '''
         Evaluates and return the log-likelihood
@@ -69,7 +70,7 @@ class hierarchical_likelihood(bilby.Likelihood):
         Neff=self.injections.effective_injections_number()
         # If the injections are not enough return 0, you cannot go to that point. This is done because the number of injections that you have
         # are not enough to calculate the selection effect
-        
+  
         xp = get_module_array(self.injections.log_weights)
 
         if (Neff<self.neffINJ) | (Neff==0.):
@@ -93,12 +94,13 @@ class hierarchical_likelihood(bilby.Likelihood):
         # Combine all the terms  
         if self.rate_model.scale_free:
             # Log likelihood for scale free model, Eq. 1.3 on the document
+            
             log_likeli = xp.sum(xp.log(self.posterior_samples_dict.sum_weights))-self.posterior_samples_dict.n_ev*xp.log(self.injections.pseudo_rate)
         else:
             Nexp=self.injections.expected_number_detections()
             # Log likelihood for  the model, Eq. 1.1 on the document
             log_likeli = -Nexp + self.posterior_samples_dict.n_ev*xp.log(self.injections.Tobs)+xp.sum(xp.log(self.posterior_samples_dict.sum_weights))
-        #print('Nexp',-Nexp)  
+
 
         # Controls on the value of the log-likelihood. If the log-likelihood is -inf, then set it to the smallest
         # python valye 1e-309
@@ -109,7 +111,7 @@ class hierarchical_likelihood(bilby.Likelihood):
             log_likeli = float(xp.nan_to_num(-xp.inf))
         else:
             log_likeli = float(xp.nan_to_num(log_likeli))
-            
+
         return float(cp2np(log_likeli))
 
 
