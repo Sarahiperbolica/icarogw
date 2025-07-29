@@ -4,7 +4,7 @@ from .cosmology import  md_rate, md_gamma_rate, powerlaw_rate, beta_rate, beta_r
 from .priors import LowpassSmoothedProb, LowpassSmoothedProbEvolving, PowerLaw, BetaDistribution, TruncatedBetaDistribution, TruncatedGaussian, Bivariate2DGaussian, SmoothedPlusDipProb, BrokenPowerLawMultiPeak
 from .priors import PowerLawGaussian, BrokenPowerLaw, PowerLawTwoGaussians, conditional_2dimpdf, conditional_2dimz_pdf, piecewise_constant_2d_distribution_normalized,paired_2dimpdf
 from .priors import PowerLawStationary, PowerLawLinear, GaussianStationary, GaussianLinear, _mixed_linear_function, _mixed_double_sigmoid_function
-from .priors import BrokenPowerLawTripleMultiPeak
+from .priors import BrokenPowerLawTripleMultiPeak, get_gaussian_norm
 import copy
 from astropy.cosmology import FlatLambdaCDM, FlatwCDM, Flatw0waCDM
 from .PBH_spin_dists import chi1_analytical_fit, chi2_analytical_fit
@@ -1670,107 +1670,138 @@ class spinprior_default_corr_gaussian_window_corr_gaussian(object):
         return chi_eff_samples, chi_p_samples
 
 
+def log_tgaussian(x,xmin,xmax,mu,sigma):
+    xp = get_module_array(x)
+    norm = get_gaussian_norm(xmin,xmax,mu,sigma)
+    toret = xp.where((x>=xmin) & (x<=xmax),
+                     -xp.log(sigma)-0.5*xp.log(2*xp.pi)-0.5*xp.power((x-mu)/sigma,2.)-xp.log(norm),
+                     -xp.inf
+                     )
+    return toret
+
+
+
+
+
+# PBH pop pdf: gaussian on chi_1, chi_2 with small sigma and mean value dependent from the masses    
+class spinprior_HBH(object):
+    def __init__(self):
+
+        #population parameters
+        self.population_parameters= ['chi_max_1g','mean_chi_2g','sigma_chi_2g',
+                                     'f_1g_m_0','f_1g_m_inf','f_1g_mt','f_1g_delta_mt']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2','mass_1_source','mass_2_source']
+    
+        # Initialize smeared Gaussians for chi_1, chi_2
+        self.name='spinprior_HBH'
+
+    def update(self,**kwargs):
+        
+        self.chi_max_1g = kwargs['chi_max_1g']
+        self.mean_chi_2g = kwargs['mean_chi_2g']
+        self.sigma_chi_2g = kwargs['sigma_chi_2g']
+        self.f_1g_m_0 = kwargs['f_1g_m_0']
+        self.f_1g_m_inf = kwargs['f_1g_m_inf']
+        self.f_1g_mt = kwargs['f_1g_mt']
+        self.f_1g_delta_mt = kwargs['f_1g_delta_mt']
+
+    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
+
+        #choose module between numpy and cupy
+        xp = get_module_array(chi_1)
+
+        p1g1g = - xp.log(self.chi_max_1g) - xp.log(self.chi_max_1g) - xp.log(2.) - xp.log(2.)
+        
+        p2g1g = log_tgaussian(chi_1,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) - xp.log(self.chi_max_1g) - xp.log(2.) - xp.log(2.)
+
+        p1g2g = log_tgaussian(chi_2,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) - xp.log(self.chi_max_1g) - xp.log(2.) - xp.log(2.)
+
+        p2g2g = log_tgaussian(chi_2,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) + log_tgaussian(chi_1,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) - xp.log(2.) - xp.log(2.)
+        
+        f1gm1 = _mixed_double_sigmoid_function(mass_1_source,self.f_1g_mt,self.f_1g_delta_mt,self.f_1g_m_0,self.f_1g_m_inf)
+        f1gm2 = _mixed_double_sigmoid_function(mass_2_source,self.f_1g_mt,self.f_1g_delta_mt,self.f_1g_m_0,self.f_1g_m_inf)
+
+        pout = f1gm1*f1gm2*xp.exp(p1g1g) + f1gm1*(1-f1gm2)*xp.exp(p1g2g) + (1-f1gm1)*f1gm2*xp.exp(p2g1g) + (1-f1gm1)*(1-f1gm2)*xp.exp(p2g2g)  
+
+        return xp.log(pout)
+        
+    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source))   
+
+
+
 # PBH pop pdf: gaussian on chi_1, chi_2 with small sigma and mean value dependent from the masses    
 class spinprior_PBH_smeared(object):
     def __init__(self):
 
         #population parameters
-        self.population_parameters= ['sigma_chi_1', 'sigma_chi_2', 'csi_spin', 'sigma_t']
-        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2']
+        self.population_parameters= ['sigma_chi_PBH', 'z_co']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2','mass_1_source','mass_2_source']
     
         # Initialize smeared Gaussians for chi_1, chi_2
         self.name='PBH_distribution_smearing'
 
     def update(self,**kwargs):
         
-        self.sigma_chi_1 = kwargs['sigma_chi_1']
-        self.sigma_chi_2 = kwargs['sigma_chi_2']
-        self.csi_spin = kwargs['csi_spin']
-        self.aligned_pdf = TruncatedGaussian(1.,kwargs['sigma_t'],-1.,1.)
-
-    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co=30):
+        self.sigma_chi_PBH = kwargs['sigma_chi_PBH']
+        self.z_co = kwargs['z_co']
+        
+    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
 
         #choose module between numpy and cupy
         xp = get_module_array(chi_1)
         sx = get_module_array_scipy(chi_1)
  
         q = mass_2_source/mass_1_source
-        mu_chi_1 = chi1_analytical_fit(mass_1_source, q, z_co)
-        sigma_chi_1 = self.sigma_chi_1
-        mu_chi_2 = chi2_analytical_fit(mass_1_source, q, z_co)
-        sigma_chi_2 = self.sigma_chi_2
+        mu_chi_1 = chi1_analytical_fit(mass_1_source, q, self.z_co)
+        mu_chi_2 = chi2_analytical_fit(mass_1_source, q, self.z_co)
 
-        # Intervals
-        a_1 = (0 - mu_chi_1) / sigma_chi_1
-        b_1 = (1 - mu_chi_1) / sigma_chi_1
-        a_2 = (0 - mu_chi_2) / sigma_chi_2
-        b_2 = (1 - mu_chi_2) / sigma_chi_2
-
-        # Safe evaluation of truncated Gaussians
-        g1 = sx.stats.truncnorm.pdf(chi_1, a_1, b_1, loc=mu_chi_1, scale=sigma_chi_1)
-        g2 = sx.stats.truncnorm.pdf(chi_2, a_2, b_2, loc=mu_chi_2, scale=sigma_chi_2)
-
-        print_i=0
-        if print_i==1:
-            #print(f"mu_chi_1: {mu_chi_1}, mu_chi_2: {mu_chi_2}, sigma_chi_1: {sigma_chi_1}, sigma_chi_2: {sigma_chi_2}")
-            #print(f"Intervals: a1={a_1}, b1={b_1}, a2={a_2}, b2={b_2}")
-            print(f"g1={g1}, g2={g2}")
-
-        #implement eq. 12 of https://arxiv.org/pdf/2406.01679 
-        log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
-                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
-
-        #log(p(chi1,chi2|m1,m2,Lambda))
-        out = xp.log(g1)+xp.log(g2)+log_angular_part
-        
-
-        #print(g1, g2, cost_1, cost_2, log_angular_part)
-
-        out = xp.log(g1) + xp.log(g2) + log_angular_part
-
+        # Second line is the angular part isotropic in spins
+        out = log_tgaussian(chi_1,0.,1.,mu_chi_1,self.sigma_chi_PBH) + log_tgaussian(chi_2,0.,1.,mu_chi_2,self.sigma_chi_PBH) + \
+        xp.log(0.5) + xp.log(0.5)
         return out
         
-    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co):
+    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
         xp = get_module_array(chi_1)
-        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source,z_co))   
+        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source))   
     
 
-# IBH pop pdf: flat prior on chi and theta  
+# IBH pop pdf: flat prior on chi and theta, evolving in mass
 class spinprior_IBH(object):
-    def __init__(self):
+    def __init__(self,mindelta=0.1,minchi=0.1):
+        # Minimum value of delta and chi for stability
+        self.mindelta, self.minchi = mindelta, minchi
         # Population-level parameters
-        self.population_parameters = ['delta', 'chi_max']
-        self.event_parameters = ['chi_1', 'chi_2', 'cos_t_1', 'cos_t_2']
-
+        self.population_parameters = ['delta_0', 'delta_dot_0','chi_IBH_0','chi_dot_IBH_0']
+        self.event_parameters = ['chi_1', 'chi_2', 'cos_t_1', 'cos_t_2','mass_1_source','mass_2_source']
         # Label for the distribution
         self.name = 'IBH_distribution'
 
     def update(self, **kwargs):
-        self.delta = kwargs['delta']
-        self.chi_max = kwargs['chi_max']
+        
+        self.delta_0 = kwargs['delta_0']       
+        self.delta_dot_0 = kwargs['delta_dot_0']
+        self.chi_IBH_0 = kwargs['chi_IBH_0']
+        self.chi_dot_IBH_0 = kwargs['chi_dot_IBH_0']
 
     def log_pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source):
         # Select array module (NumPy or CuPy)
         xp = get_module_array(chi_1)
         sx = get_module_array_scipy(chi_1)
 
-        # Compute uniform PDFs for chi ∈ [0, chi_max]
-        u1 = sx.stats.uniform.pdf(chi_1, loc=0.0, scale=self.chi_max)
-        u2 = sx.stats.uniform.pdf(chi_2, loc=0.0, scale=self.chi_max)
+        delta_1 = self.delta_0+self.delta_dot_0*(mass_1_source/30.)
+        delta_2 = self.delta_0+self.delta_dot_0*(mass_2_source/30.)
+        chi_IBH_max_1 = self.chi_IBH_0+self.chi_dot_IBH_0*(mass_1_source/30.)
+        chi_IBH_max_2 = self.chi_IBH_0+self.chi_dot_IBH_0*(mass_2_source/30.)
 
-        # Compute log of uniform PDF for cosθ ∈ [1 - δ, 1]
-        log_angular_part = xp.log(
-            sx.stats.uniform.pdf(cos_t_1, loc=1 - self.delta, scale=self.delta)
-        ) + xp.log(
-            sx.stats.uniform.pdf(cos_t_2, loc=1 - self.delta, scale=self.delta)
-        )
+        # Clip to minimal and maximum values for numerical stability
+        delta_1 = np.clip(delta_1,self.mindelta,1.)
+        delta_2 = np.clip(delta_2,self.mindelta,1.)
+        chi_IBH_max_1 = np.clip(chi_IBH_max_1,self.minchi,1.)
+        chi_IBH_max_2 = np.clip(chi_IBH_max_2,self.minchi,1.)
 
-        print(u1, u2, log_angular_part)
-
-        # Combine logs: log[p(chi1) * p(chi2) * p(cos_t_1) * p(cos_t_2)]
-        out = xp.log(u1) + xp.log(u2) + log_angular_part
-
-        print(out)
+        out = xp.log(0.5/delta_1) + xp.log(0.5/delta_2) + xp.log(1/chi_IBH_max_1) + xp.log(1/chi_IBH_max_2)
 
         return out
 
