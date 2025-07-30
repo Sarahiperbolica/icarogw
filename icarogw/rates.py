@@ -44,18 +44,24 @@ class CBC_astro_rate_spin(object):
         return self.log_rate_PE(prior,**kwargs)
     
 class CBC_astro_rate_spin_3pops(object):
-    def __init__(self,IBH_rate,HBH_rate,PBH_rate):
+    def __init__(self,IBH_rate,HBH_rate,PBH_rate,common_pop_parameters=[]):
         self.scale_free = False
         
         self.IBH_rate = IBH_rate
         self.HBH_rate = HBH_rate
         self.PBH_rate = PBH_rate
 
-        mass_pars = [kk+'_IBH' for kk in IBH_rate.mw.population_parameters] + [kk+'_HBH' for kk in HBH_rate.mw.population_parameters] + [kk+'_PBH' for kk in PBH_rate.mw.population_parameters]
-        rate_pars = [kk+'_IBH' for kk in IBH_rate.rw.population_parameters] + [kk+'_HBH' for kk in HBH_rate.rw.population_parameters] + [kk+'_PBH' for kk in PBH_rate.rw.population_parameters]
-        spin_pars = [kk+'_IBH' for kk in IBH_rate.sw.population_parameters] + [kk+'_HBH' for kk in HBH_rate.sw.population_parameters] + [kk+'_PBH' for kk in PBH_rate.sw.population_parameters]
+        mass_pars = [kk+'_IBH' for kk in IBH_rate.mw.population_parameters if kk not in common_pop_parameters] + \
+            [kk+'_HBH' for kk in HBH_rate.mw.population_parameters if kk not in common_pop_parameters] + \
+                [kk+'_PBH' for kk in PBH_rate.mw.population_parameters if kk not in common_pop_parameters]
+        rate_pars = [kk+'_IBH' for kk in IBH_rate.rw.population_parameters if kk not in common_pop_parameters] + \
+            [kk+'_HBH' for kk in HBH_rate.rw.population_parameters if kk not in common_pop_parameters] + \
+                [kk+'_PBH' for kk in PBH_rate.rw.population_parameters if kk not in common_pop_parameters]
+        spin_pars = [kk+'_IBH' for kk in IBH_rate.sw.population_parameters if kk not in common_pop_parameters] + \
+              [kk+'_HBH' for kk in HBH_rate.sw.population_parameters if kk not in common_pop_parameters] + \
+                  [kk+'_PBH' for kk in PBH_rate.sw.population_parameters if kk not in common_pop_parameters]
 
-        self.population_parameters =  IBH_rate.cw.population_parameters+mass_pars+rate_pars+spin_pars+['R0_IBH','R0_HBH','R0_PBH']
+        self.population_parameters =  IBH_rate.cw.population_parameters+mass_pars+rate_pars+spin_pars+['R0_IBH','R0_HBH','R0_PBH'] + common_pop_parameters
             
         event_parameters = ['mass_1', 'mass_2', 'luminosity_distance','chi_1','chi_2','cos_t_1','cos_t_2']
      

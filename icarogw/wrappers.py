@@ -1737,7 +1737,7 @@ class spinprior_PBH_smeared(object):
     def __init__(self):
 
         #population parameters
-        self.population_parameters= ['sigma_chi_PBH', 'z_co']
+        self.population_parameters= ['sigma_chi_pbh', 'z_co']
         self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2','mass_1_source','mass_2_source']
     
         # Initialize smeared Gaussians for chi_1, chi_2
@@ -1745,7 +1745,7 @@ class spinprior_PBH_smeared(object):
 
     def update(self,**kwargs):
         
-        self.sigma_chi_PBH = kwargs['sigma_chi_PBH']
+        self.sigma_chi_PBH = kwargs['sigma_chi_pbh']
         self.z_co = kwargs['z_co']
         
     def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
@@ -1774,7 +1774,7 @@ class spinprior_IBH(object):
         # Minimum value of delta and chi for stability
         self.mindelta, self.minchi = mindelta, minchi
         # Population-level parameters
-        self.population_parameters = ['delta_0', 'delta_dot_0','chi_IBH_0','chi_dot_IBH_0']
+        self.population_parameters = ['delta_0', 'delta_dot_0','chi_ibh_0','chi_dot_ibh_0']
         self.event_parameters = ['chi_1', 'chi_2', 'cos_t_1', 'cos_t_2','mass_1_source','mass_2_source']
         # Label for the distribution
         self.name = 'IBH_distribution'
@@ -1783,8 +1783,8 @@ class spinprior_IBH(object):
         
         self.delta_0 = kwargs['delta_0']       
         self.delta_dot_0 = kwargs['delta_dot_0']
-        self.chi_IBH_0 = kwargs['chi_IBH_0']
-        self.chi_dot_IBH_0 = kwargs['chi_dot_IBH_0']
+        self.chi_IBH_0 = kwargs['chi_ibh_0']
+        self.chi_dot_IBH_0 = kwargs['chi_dot_ibh_0']
 
     def log_pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source):
         # Select array module (NumPy or CuPy)
