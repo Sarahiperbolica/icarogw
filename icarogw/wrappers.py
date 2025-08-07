@@ -1724,6 +1724,8 @@ class spinprior_HBH(object):
 
         pout = f1gm1*f1gm2*xp.exp(p1g1g) + f1gm1*(1-f1gm2)*xp.exp(p1g2g) + (1-f1gm1)*f1gm2*xp.exp(p2g1g) + (1-f1gm1)*(1-f1gm2)*xp.exp(p2g2g)  
 
+        #print("\nHBH: ", xp.log(pout))
+
         return xp.log(pout)
         
     def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
@@ -1761,6 +1763,9 @@ class spinprior_PBH_smeared(object):
         # Second line is the angular part isotropic in spins
         out = log_tgaussian(chi_1,0.,1.,mu_chi_1,self.sigma_chi_PBH) + log_tgaussian(chi_2,0.,1.,mu_chi_2,self.sigma_chi_PBH) + \
         xp.log(0.5) + xp.log(0.5)
+
+        #print("\nPBH: ", out)
+
         return out
         
     def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
@@ -1803,13 +1808,20 @@ class spinprior_IBH(object):
         chi_IBH_max_2 = np.clip(chi_IBH_max_2,self.minchi,2.)
 
         c1 = log_tgaussian(chi_1,0.,1.,0.,chi_IBH_max_1)
-        c2 = log_tgaussian(chi_1,0.,1.,0.,chi_IBH_max_2)
-        a1 = log_tgaussian(cos_t_1,-1.,1.,1.,1.-delta_1)
-        a2 = log_tgaussian(cos_t_2,-1.,1.,1.,1.-delta_2)
+        c2 = log_tgaussian(chi_2,0.,1.,0.,chi_IBH_max_2)
+        a1 = log_tgaussian(cos_t_1,-1.,1.,1.,delta_1)
+        a2 = log_tgaussian(cos_t_2,-1.,1.,1.,delta_2)
         out = a1 + a2 + c1 + c2
+
+        #print("\nIBH a1: ", a1)
+        #print("\nIBH a2: ", a2)
+        #print("\nIBH c1: ", c1)
+        #print("\nIBH c2: ", c2)
+        #print("\nIBH out: ", out)
 
         return out
 
     def pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source):
         xp = get_module_array(chi_1)
+        print(xp.exp(self.log_pdf(chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source)))
         return xp.exp(self.log_pdf(chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source))
