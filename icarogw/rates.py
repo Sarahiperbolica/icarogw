@@ -25,6 +25,12 @@ class CBC_astro_rate_spin(object):
         self.sw.update(**{key: kwargs[key] for key in self.sw.population_parameters})    
         self.R0 = kwargs['R0']
         
+    def update_all_but_cosmo(self,**kwargs):
+        self.mw.update(**{key: kwargs[key] for key in self.mw.population_parameters})
+        self.rw.update(**{key: kwargs[key] for key in self.rw.population_parameters})
+        self.sw.update(**{key: kwargs[key] for key in self.sw.population_parameters})    
+        self.R0 = kwargs['R0']
+        
     def log_rate_PE(self,prior,**kwargs):
         xp = get_module_array(prior)
         ms1, ms2, z = detector2source(kwargs['mass_1'],kwargs['mass_2'],kwargs['luminosity_distance'],self.cw.cosmology) 
@@ -42,7 +48,7 @@ class CBC_astro_rate_spin(object):
     
     def log_rate_injections(self,prior,**kwargs):    
         return self.log_rate_PE(prior,**kwargs)
-    
+
 class CBC_astro_rate_spin_3pops(object):
     def __init__(self,IBH_rate,HBH_rate,PBH_rate,common_pop_parameters=[]):
         self.scale_free = False
@@ -70,9 +76,13 @@ class CBC_astro_rate_spin_3pops(object):
             
     def update(self,**kwargs):
 
-        self.IBH_rate.update(**{key.replace('_IBH',''): kwargs[key] for key in self.population_parameters})
-        self.HBH_rate.update(**{key.replace('_HBH',''): kwargs[key] for key in self.population_parameters})
-        self.PBH_rate.update(**{key.replace('_PBH',''): kwargs[key] for key in self.population_parameters})
+        self.IBH_rate.update_all_but_cosmo(**{key.replace('_IBH',''): kwargs[key] for key in self.population_parameters})
+        self.HBH_rate.update_all_but_cosmo(**{key.replace('_HBH',''): kwargs[key] for key in self.population_parameters})
+        self.PBH_rate.update_all_but_cosmo(**{key.replace('_PBH',''): kwargs[key] for key in self.population_parameters})
+        
+        self.IBH_rate.cw.update(**{key.replace('_IBH',''): kwargs[key] for key in self.IBH_rate.cw.population_parameters})
+        self.HBH_rate.cw = self.IBH_rate.cw
+        self.PBH_rate.cw = self.IBH_rate.cw
 
     def log_rate_PE(self,prior,**kwargs):
         return self.IBH_rate.log_rate_PE(prior,**kwargs) + self.HBH_rate.log_rate_PE(prior,**kwargs) + self.PBH_rate.log_rate_PE(prior,**kwargs)  
