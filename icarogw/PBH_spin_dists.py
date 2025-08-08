@@ -1,28 +1,5 @@
 import numpy as np
 
-def Pchieff(chieffv, chi1, chi2, q):
-    return np.where(
-        abs(chieffv) <= (chi1 + chi2 * q) / (1 + q),
-        (
-            (
-                (1 + q) ** 2
-                * (
-                    ((chieffv + chieffv * q - chi1 - q * chi2) ** 2 / (1 + q) ** 2)
-                    ** (1 / 2)
-                    - ((chieffv + chieffv * q + chi1 - q * chi2) ** 2 / (1 + q) ** 2)
-                    ** (1 / 2)
-                    - ((chieffv + chieffv * q - chi1 + q * chi2) ** 2 / (1 + q) ** 2)
-                    ** (1 / 2)
-                    + ((chieffv + chieffv * q + chi1 + q * chi2) ** 2 / (1 + q) ** 2)
-                    ** (1 / 2)
-                )
-            )
-            / (8.0 * q * chi1 * chi2)
-        ),
-        0.0,
-    )
-
-
 # PBH mass spin relation
 def fa1(zco, q):
     return (
@@ -119,91 +96,20 @@ def fc2(zco, q):
         + 0.0000864602 * zco**3
     )
 
-
 def chi1_analytical_fit(m1, q, zco):
-    return 0.01 + np.minimum(
-        0.988,
+    return np.clip(
         10 ** fb1(zco, q)
         * (np.absolute(m1 - fa1(zco, q))) ** fc1(zco, q)
         * np.heaviside(m1 - fa1(zco, q), 1),
+        0.01,
+        0.998,
     )
 
-
 def chi2_analytical_fit(m1, q, zco):
-    return 0.01 + np.minimum(
-        0.988,
+    return np.clip(
         10 ** fb2(zco, q)
         * (np.absolute(m1 - fa2(zco, q))) ** fc2(zco, q)
         * np.heaviside(m1 - fa2(zco, q), 1),
+        0.01,
+        0.998,
     )
-
-
-# 0: q #1: chi1 #2: chi2 #3: chieff val
-def spindistPBH(zco, m1, m2, x):
-    q = m2 / m1
-    return Pchieff(x, chi1(m1, q, zco), chi2(m1, q, zco), q)
-
-
-# distribution of chi1 and chi2. Define a Gaussian normalized to 1 for x in [0,1]
-def norm_g(x, mu, sigma):
-    normalization_factor = 1 / (
-        0.5 * (erf((1 - mu) / (np.sqrt(2) * sigma)) + erf(mu / (np.sqrt(2) * sigma)))
-    )
-    gaussian = np.exp(-((x - mu) ** 2) / (2 * sigma**2)) / (sigma * np.sqrt(2 * np.pi))
-    return normalization_factor * gaussian
-
-
-# define width of the Gaussian
-sigma_Pchi = 0.05
-
-
-def chi1_Smoothed(x, m1, q, zco):
-    return norm_g(x, chi1(m1, q, zco), sigma_Pchi)
-
-
-def chi2_Smoothed(x, m1, q, zco):
-    return norm_g(x, chi2(m1, q, zco), sigma_Pchi)
-
-
-# ABH mass spin relation
-def Li2(x):
-    return scipy.special.spence(1 - x)
-
-
-def Pchi1G1G(x, xmax):
-    chi = abs(x / xmax)
-    return (
-        np.where(
-            chi < 1,
-            np.where(
-                chi < 1 / 2,
-                2
-                - ((4 + np.pi**2) * chi) / 2.0
-                - np.log(1 - 2 * chi) * (1 - 2 * chi + chi * np.log(1 - 2 * chi))
-                - 2 * chi * Li2((2 * chi) / (-1 + 2 * chi)),
-                2
-                - 2 * chi
-                - (1 - 2 * chi + chi * np.log(2 * chi)) * np.log(-1 + 2 * chi)
-                + chi * Li2(1 - 1 / (2.0 * chi))
-                - chi * Li2(1 / (2.0 * chi)),
-            ),
-            0.0,
-        )
-        / xmax
-    )
-
-
-chif = 0.68
-
-
-def Pchi1G2G(x, xmax, q):
-    return Pchieff(x, chif, xmax, q)
-
-
-def frac(f0, alphaM, alphaq, m1, m2):
-    return max(0, min(f0 + alphaM * (m1 + m2) / 60 - alphaq * ((m2 / m1) - 0.5), 1))
-
-
-def PchiDyn(m1, m2, x, xmax, f0, alphaM, alphaq):
-    f = frac(f0, alphaM, alphaq, m1, m2)
-    return (1 - f) * Pchi1G1G(x, xmax) + f * Pchi1G2G(x, xmax, m2 / m1)
