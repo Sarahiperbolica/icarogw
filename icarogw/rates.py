@@ -69,7 +69,7 @@ class CBC_astro_rate_spin_3pops(object):
 
         self.population_parameters =  IBH_rate.cw.population_parameters+mass_pars+rate_pars+spin_pars+['R0_IBH','R0_HBH','R0_PBH'] + common_pop_parameters
             
-        event_parameters = ['mass_1', 'mass_2', 'luminosity_distance','chi_1','chi_2','cos_t_1','cos_t_2']
+        event_parameters = ['mass_1', 'mass_2', 'luminosity_distance', 'chi_1', 'chi_2', 'cos_t_1', 'cos_t_2']
      
         self.PEs_parameters = event_parameters.copy()
         self.injections_parameters = event_parameters.copy()
@@ -85,8 +85,17 @@ class CBC_astro_rate_spin_3pops(object):
         self.PBH_rate.cw = self.IBH_rate.cw
 
     def log_rate_PE(self,prior,**kwargs):
-        return self.IBH_rate.log_rate_PE(prior,**kwargs) + self.HBH_rate.log_rate_PE(prior,**kwargs) + self.PBH_rate.log_rate_PE(prior,**kwargs)  
-    
+
+        xp = get_module_array(prior)
+
+        log_R1 = self.IBH_rate.log_rate_PE(prior, **kwargs)
+        log_R2 = self.HBH_rate.log_rate_PE(prior, **kwargs)
+        log_R3 = self.PBH_rate.log_rate_PE(prior, **kwargs)
+
+        log_sum_12 = xp.logaddexp(log_R1, log_R2)
+        log_sum_123 = xp.logaddexp(log_sum_12, log_R3)
+        return log_sum_123
+
     def log_rate_injections(self,prior,**kwargs):    
         return self.log_rate_PE(prior,**kwargs)
 
@@ -216,7 +225,6 @@ class CBC_rate_mchirp_q(object):
             log_out = log_weights
 
         return log_out
-
 
 class CBC_mixte_pop_rate(object):
     '''
