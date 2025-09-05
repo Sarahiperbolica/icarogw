@@ -636,15 +636,15 @@ class spinprior_default(object):
             raise ValueError('Alpha and Beta must be > 1') 
         self.beta_pdf = BetaDistribution(self.alpha_chi,self.beta_chi)
     
-    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2):
+    def log_pdf(self,mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2):
         xp = get_module_array(chi_1)
         log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
                                     xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
         return self.beta_pdf.log_pdf(chi_1)+self.beta_pdf.log_pdf(chi_2)+log_angular_part
         
-    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2):
+    def pdf(self,mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2):
         xp = get_module_array(chi_1)
-        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2))
+        return xp.exp(self.log_pdf(mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2))
 
 
 class spinprior_default_gaussian(object):
@@ -1724,8 +1724,6 @@ class spinprior_HBH(object):
 
         pout = f1gm1*f1gm2*xp.exp(p1g1g) + f1gm1*(1-f1gm2)*xp.exp(p1g2g) + (1-f1gm1)*f1gm2*xp.exp(p2g1g) + (1-f1gm1)*(1-f1gm2)*xp.exp(p2g2g)  
 
-        #print("\nHBH: ", xp.log(pout))
-
         return xp.log(pout)
         
     def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
@@ -1763,8 +1761,6 @@ class spinprior_PBH_smeared(object):
         # Second line is the angular part isotropic in spins
         out = log_tgaussian(chi_1,0.,1.,mu_chi_1,self.sigma_chi_PBH) + log_tgaussian(chi_2,0.,1.,mu_chi_2,self.sigma_chi_PBH) + \
         xp.log(0.5) + xp.log(0.5)
-
-        #print("\nPBH: ", out)
 
         return out
         
@@ -1813,15 +1809,30 @@ class spinprior_IBH(object):
         a2 = log_tgaussian(cos_t_2,-1.,1.,1.,delta_2)
         out = a1 + a2 + c1 + c2
 
-        #print("\nIBH a1: ", a1)
-        #print("\nIBH a2: ", a2)
-        #print("\nIBH c1: ", c1)
-        #print("\nIBH c2: ", c2)
-        #print("\nIBH out: ", out)
-
         return out
 
     def pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source):
         xp = get_module_array(chi_1)
         print(xp.exp(self.log_pdf(chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source)))
         return xp.exp(self.log_pdf(chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source))
+
+class spinprior_default_gaussian_component_spins(object):
+    def __init__(self):
+        self.population_parameters=['mu_chi','sigma_chi','mu_t','sigma_t','csi_spin']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2']
+
+    def update(self,**kwargs):        
+        self.csi_spin = kwargs['csi_spin']
+        self.aligned_pdf = TruncatedGaussian(kwargs['mu_t'],kwargs['sigma_t'],-1.,1.)
+        self.g1 = TruncatedGaussian(kwargs['mu_chi'],kwargs['sigma_chi'],0.,1.)
+        self.g2 = TruncatedGaussian(kwargs['mu_chi'],kwargs['sigma_chi'],0.,1.)
+    
+    def log_pdf(self,mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2):
+        xp = get_module_array(chi_1)
+        log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
+                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
+        return self.g1.log_pdf(chi_1)+self.g2.log_pdf(chi_2)+log_angular_part
+        
+    def pdf(self,mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2))
