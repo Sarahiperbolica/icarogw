@@ -524,6 +524,55 @@ class spinprior_default_evolving_gaussian(object):
         xp = get_module_array(chi_1)
         return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source))
 
+class spinprior_default_gaussian_window_gaussian(object):
+    '''
+    TO BE REVIEWED FOR O4b
+    Gaussian to Gaussian spin mass evolution
+    '''
+    def __init__(self):
+        self.population_parameters= ['mt', 
+                                     'delta_mt','mix_f',
+                                     'mu_chi_1','sigma_chi_1',
+                                     'mu_chi_2','sigma_chi_2',
+                                     'sigma_t','csi_spin']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2']
+    
+
+    def update(self,**kwargs):
+        
+        self.mu_chi_1 = kwargs['mu_chi_1']
+        self.sigma_chi_1 = kwargs['sigma_chi_1']
+        self.mu_chi_2 = kwargs['mu_chi_2']
+        self.sigma_chi_2 = kwargs['sigma_chi_2']
+        self.csi_spin = kwargs['csi_spin']
+        self.gaussian_pdf_chi_1 = TruncatedGaussian(kwargs['mu_chi_1'],kwargs['sigma_chi_1'],0.,1.)
+        self.gaussian_pdf_chi_2 = TruncatedGaussian(kwargs['mu_chi_2'],kwargs['sigma_chi_2'],0.,1.)
+
+        self.mt, self.delta_mt, self.mix_f = kwargs['mt'], kwargs['delta_mt'], kwargs['mix_f']
+
+        self.aligned_pdf = TruncatedGaussian(1.,kwargs['sigma_t'],-1.,1.)
+
+    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
+        
+        xp = get_module_array(chi_1)
+        # FIXME: The sigmoid function implementation has been changed. Check it is correct.
+        wz_1 = _mixed_double_sigmoid_function(mass_1_source, self.mix_f, 0., self.mt, self.delta_mt)
+        wz_2 = _mixed_double_sigmoid_function(mass_2_source, self.mix_f, 0., self.mt, self.delta_mt)
+
+        pdf_1 = wz_1*self.gaussian_pdf_chi_1.pdf(chi_1)+(1-wz_1)*self.gaussian_pdf_chi_2.pdf(chi_1)
+        pdf_2 = wz_2*self.gaussian_pdf_chi_1.pdf(chi_2)+(1-wz_2)*self.gaussian_pdf_chi_2.pdf(chi_2)
+
+        log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
+                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
+        
+        out = xp.log(pdf_1)+xp.log(pdf_2)+log_angular_part
+        
+        return out
+        
+    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source))
+
 class spinprior_default_beta_window_gaussian(object):
     def __init__(self):
         self.population_parameters= ['mt', 
