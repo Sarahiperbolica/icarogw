@@ -483,6 +483,7 @@ class massprior_BinModel2d(pm1m2_prob):
 # Spin models #
 # ----------- #
 
+# TO BE REVIEWED O4b
 class spinprior_default_evolving_gaussian(object):
     def __init__(self):
         self.population_parameters=['mu_chi','sigma_chi','mu_dot','sigma_dot'
@@ -524,6 +525,7 @@ class spinprior_default_evolving_gaussian(object):
         xp = get_module_array(chi_1)
         return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source))
 
+# TO BE REVIEWED O4b (priority 1)
 class spinprior_default_gaussian_window_gaussian(object):
     '''
     TO BE REVIEWED FOR O4b
@@ -555,9 +557,9 @@ class spinprior_default_gaussian_window_gaussian(object):
     def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
         
         xp = get_module_array(chi_1)
-        # FIXME: The sigmoid function implementation has been changed. Check it is correct.
-        wz_1 = _mixed_double_sigmoid_function(mass_1_source, self.mix_f, 0., self.mt, self.delta_mt)
-        wz_2 = _mixed_double_sigmoid_function(mass_2_source, self.mix_f, 0., self.mt, self.delta_mt)
+        
+        wz_1 = _mixed_double_sigmoid_function(x=mass_1_source, xt=self.mt, delta_xt=self.delta_mt, mix_x0=self.mix_f, mix_x1=0.)
+        wz_2 = _mixed_double_sigmoid_function(x=mass_2_source, xt=self.mt, delta_xt=self.delta_mt, mix_x0=self.mix_f, mix_x1=0.)
 
         pdf_1 = wz_1*self.gaussian_pdf_chi_1.pdf(chi_1)+(1-wz_1)*self.gaussian_pdf_chi_2.pdf(chi_1)
         pdf_2 = wz_2*self.gaussian_pdf_chi_1.pdf(chi_2)+(1-wz_2)*self.gaussian_pdf_chi_2.pdf(chi_2)
@@ -573,6 +575,7 @@ class spinprior_default_gaussian_window_gaussian(object):
         xp = get_module_array(chi_1)
         return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source))
 
+# TO BE REVIEWED O4b
 class spinprior_default_beta_window_gaussian(object):
     def __init__(self):
         self.population_parameters= ['mt', 
@@ -603,9 +606,9 @@ class spinprior_default_beta_window_gaussian(object):
     def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
         
         xp = get_module_array(chi_1)
-        # FIXME: The sigmoid function implementation has been changed. Check it is correct.
-        wz_1 = _mixed_double_sigmoid_function(mass_1_source, self.mix_f, 0., self.mt, self.delta_mt)
-        wz_2 = _mixed_double_sigmoid_function(mass_2_source, self.mix_f, 0., self.mt, self.delta_mt)
+        
+        wz_1 = _mixed_double_sigmoid_function(x=mass_1_source, xt=self.mt, delta_xt=self.delta_mt, mix_x0=self.mix_f, mix_x1=0.)
+        wz_2 = _mixed_double_sigmoid_function(x=mass_2_source, xt=self.mt, delta_xt=self.delta_mt, mix_x0=self.mix_f, mix_x1=0.)
 
         pdf_1 = wz_1*self.beta_pdf_chi.pdf(chi_1)+(1-wz_1)*self.gaussian_pdf_chi.pdf(chi_1)
         pdf_2 = wz_2*self.beta_pdf_chi.pdf(chi_2)+(1-wz_2)*self.gaussian_pdf_chi.pdf(chi_2)
@@ -621,7 +624,7 @@ class spinprior_default_beta_window_gaussian(object):
         xp = get_module_array(chi_1)
         return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source))
 
-
+# TO BE REVIEWED O4b
 class spinprior_default_beta_window_beta(object):
     def __init__(self):
         self.population_parameters= ['mt', 
@@ -653,9 +656,9 @@ class spinprior_default_beta_window_beta(object):
     def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
         
         xp = get_module_array(chi_1)
-        # FIXME: The sigmoid function implementation has been changed. Check it is correct.
-        wz_1 = _mixed_double_sigmoid_function(mass_1_source, self.mix_f, 0., self.mt, self.delta_mt)
-        wz_2 = _mixed_double_sigmoid_function(mass_2_source, self.mix_f, 0., self.mt, self.delta_mt)
+        
+        wz_1 = _mixed_double_sigmoid_function(x=mass_1_source, xt=self.mt, delta_xt=self.delta_mt, mix_x0=self.mix_f, mix_x1=0.)
+        wz_2 = _mixed_double_sigmoid_function(x=mass_2_source, xt=self.mt, delta_xt=self.delta_mt, mix_x0=self.mix_f, mix_x1=0.)
 
         pdf_1 = wz_1*self.beta_pdf_chi_low.pdf(chi_1)+(1-wz_1)*self.beta_pdf_chi_high.pdf(chi_1)
         pdf_2 = wz_2*self.beta_pdf_chi_low.pdf(chi_2)+(1-wz_2)*self.beta_pdf_chi_high.pdf(chi_2)
