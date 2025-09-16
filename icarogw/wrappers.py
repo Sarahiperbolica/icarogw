@@ -483,6 +483,29 @@ class massprior_BinModel2d(pm1m2_prob):
 # Spin models #
 # ----------- #
 
+class spinprior_default_gaussian_bis(object):
+    '''
+    Same as spinprior_default_gaussian(), but here chi_1 and chi_2 share the same Gaussian distribution.
+    '''
+    def __init__(self):
+        self.population_parameters=['mu_chi','sigma_chi','sigma_t','csi_spin']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2']
+
+    def update(self,**kwargs):        
+        self.csi_spin = kwargs['csi_spin']
+        self.aligned_pdf = TruncatedGaussian(1.,kwargs['sigma_t'],-1.,1.)
+        self.g = TruncatedGaussian(kwargs['mu_chi'],kwargs['sigma_chi'],0.,1.)
+    
+    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2):
+        xp = get_module_array(chi_1)
+        log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
+                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
+        return self.g.log_pdf(chi_1)+self.g.log_pdf(chi_2)+log_angular_part
+        
+    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2))
+
 # TO BE REVIEWED O4b
 class spinprior_default_evolving_gaussian(object):
     def __init__(self):
