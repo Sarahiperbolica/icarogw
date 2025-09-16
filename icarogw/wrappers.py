@@ -868,6 +868,93 @@ class PowerLaw_PowerLaw_PowerLaw():
         return xp.log(self.pdf(m))
 
 
+class PowerLaw_PowerLaw_PowerLaw_PowerLaw():
+    '''
+        Class implementing the mass function model for four stationary PowerLaws.
+
+        Some options are available:
+            - flag_powerlaw_smoothing applies a left window function to the PowerLaws.
+
+        The module is stand alone and not compatible with other wrappers.
+    '''
+
+    def __init__(self, flag_powerlaw_smoothing = 1):
+        
+        self.population_parameters   = [
+            'alpha_a', 'mmin_a', 'mmax_a',
+            'alpha_b', 'mmin_b', 'mmax_b',
+            'alpha_c', 'mmin_c', 'mmax_c',
+            'alpha_d', 'mmin_d', 'mmax_d',
+            'mix_alpha', 'mix_beta', 'mix_gamma'
+        ]
+        self.flag_powerlaw_smoothing = flag_powerlaw_smoothing
+
+        if self.flag_powerlaw_smoothing: self.population_parameters += [
+            'delta_m_a', 'delta_m_b', 'delta_m_c', 'delta_m_d'
+        ]
+
+    def update(self,**kwargs):
+
+        self.alpha_a   = kwargs['alpha_a']
+        self.mmin_a    = kwargs['mmin_a']
+        self.mmax_a    = kwargs['mmax_a']
+        self.alpha_b   = kwargs['alpha_b']
+        self.mmin_b    = kwargs['mmin_b']
+        self.mmax_b    = kwargs['mmax_b']
+        self.alpha_c   = kwargs['alpha_c']
+        self.mmin_c    = kwargs['mmin_c']
+        self.mmax_c    = kwargs['mmax_c']
+        self.alpha_d   = kwargs['alpha_d']
+        self.mmin_d    = kwargs['mmin_d']
+        self.mmax_d    = kwargs['mmax_d']
+        self.mix_alpha = kwargs['mix_alpha']
+        self.mix_beta  = kwargs['mix_beta']
+        self.mix_gamma = kwargs['mix_gamma']
+
+        if self.flag_powerlaw_smoothing:
+            self.delta_m_a = kwargs['delta_m_a']
+            self.delta_m_b = kwargs['delta_m_b']
+            self.delta_m_c = kwargs['delta_m_c']
+            self.delta_m_d = kwargs['delta_m_d']
+
+    def pdf(self,m):
+
+        xp = get_module_array(m)
+        powerlaw_class_a = PowerLawStationary(self.alpha_a, self.mmin_a, self.mmax_a)
+        powerlaw_class_b = PowerLawStationary(self.alpha_b, self.mmin_b, self.mmax_b)
+        powerlaw_class_c = PowerLawStationary(self.alpha_c, self.mmin_c, self.mmax_c)
+        powerlaw_class_d = PowerLawStationary(self.alpha_d, self.mmin_d, self.mmax_d)
+        # Add left smoothing to the evolving PowerLaw.
+        if self.flag_powerlaw_smoothing:
+            powerlaw_class_a = LowpassSmoothedProb(powerlaw_class_a, self.delta_m_a)
+            powerlaw_class_b = LowpassSmoothedProb(powerlaw_class_b, self.delta_m_b)
+            powerlaw_class_c = LowpassSmoothedProb(powerlaw_class_c, self.delta_m_c)
+            powerlaw_class_d = LowpassSmoothedProb(powerlaw_class_d, self.delta_m_d)
+        powerlaw_part_a = powerlaw_class_a.pdf(m)
+        powerlaw_part_b = powerlaw_class_b.pdf(m)
+        powerlaw_part_c = powerlaw_class_c.pdf(m)
+        powerlaw_part_d = powerlaw_class_d.pdf(m)
+
+        if (# Impose the rate to be between [0,1].
+            self.mix_alpha  < 0 or self.mix_alpha  > 1 or
+            self.mix_beta   < 0 or self.mix_beta   > 1 or
+            self.mix_gamma  < 0 or self.mix_gamma  > 1 or
+            (self.mix_alpha + self.mix_beta + self.mix_gamma > 1)
+        ):
+            return xp.nan
+        else:
+            return (
+                self.mix_alpha * powerlaw_part_a +
+                self.mix_beta  * powerlaw_part_b +
+                self.mix_gamma * powerlaw_part_c +
+                (1 - self.mix_alpha - self.mix_beta - self.mix_gamma) * powerlaw_part_d
+            )
+
+    def log_pdf(self,m):
+        xp = get_module_array(m)
+        return xp.log(self.pdf(m))
+
+
 class PowerLaw_PowerLaw_Gaussian():
     '''
         Class implementing the mass function model for two stationary PowerLaws
