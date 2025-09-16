@@ -701,7 +701,6 @@ class spinprior_default(object):
         xp = get_module_array(chi_1)
         return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2))
 
-
 #LVK reviewed
 class spinprior_default_gaussian(object):
     def __init__(self):
