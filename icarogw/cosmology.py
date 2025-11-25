@@ -388,7 +388,9 @@ class alphalog_astropycosmology(astropycosmology):
     
 
 class galaxy_MF(object):
-    def __init__(self,band=None,Mmin=None,Mmax=None,Mstar=None,alpha=None,phistar=None,Q = None, P = None, z0 = None):
+    def __init__(self,band=None,
+                 Mmin=None,Mmax=None,Mstar=None,alpha=None,phistar=None,Q = None, P = None, z0 = None,
+                LLstarcut = None):
         '''
         A class to handle the Schechter function in absolute magnitude. The parametrization for the Schecter function evolution is taken from
         1111.0166
@@ -418,6 +420,12 @@ class galaxy_MF(object):
                 self.Mmin,self.Mmax,self.Mstar,self.alpha,self.phistar, self.Q, self.P, self.z0 = -26.0, -20.0, -23.80, -1.14, 0.86e-2*1e9, 0., 0., 0.1
             else:
                 raise ValueError('Band not known')
+
+        if LLstarcut is not None:
+            Mmax_try = self.Mstar-2.5*np.log10(LLstarcut)
+            if Mmax_try>self.Mmax:
+                raise ValueError('The maximum L/L* cut you can apply is {:.3f} L/L*'.format(10**((self.Mstar-self.Mmax)/2.5)))
+            self.Mmax = Mmax_try
                 
     def build_MF(self,cosmology):
         '''

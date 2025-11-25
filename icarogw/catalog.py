@@ -467,7 +467,7 @@ def initialize_icarogw_catalog(outfolder,outfile,grouping):
 
 #LVK reviewed
 def calculate_interpolant_files(outfolder,z_grid,pixel,grouping,subgrouping,
-                                band,cosmo_ref,epsilon,ptype='gaussian'):
+                                band,cosmo_ref,epsilon,ptype='gaussian',LLstarcut=None):
         '''
         This function calculates an optimized redshift grid to calculate
         the interpolant for each pixelated file
@@ -495,7 +495,7 @@ def calculate_interpolant_files(outfolder,z_grid,pixel,grouping,subgrouping,
         '''
        
         calc_kcorr=kcorr(band)
-        sch_fun=galaxy_MF(band=band)
+        sch_fun=galaxy_MF(band=band,LLstarcut=None)
         sch_fun.build_MF(cosmo_ref)
         sch_fun.build_effective_number_density_interpolant(epsilon)
 
@@ -504,6 +504,8 @@ def calculate_interpolant_files(outfolder,z_grid,pixel,grouping,subgrouping,
         with h5py.File(os.path.join(outfolder,'pixel_{:d}.hdf5'.format(pixel)),'r+') as cat:
             subcat=cat[grouping].require_group(subgrouping)
             subcat.attrs['band'] = band
+            if LLstarcut is not None:
+                subcat.attrs['LLstarcut'] = LLstarcut
 
             if 'interpolant_calculated' not in list(subcat.attrs.keys()):
                 subcat.attrs['interpolant_calculated'] = False
@@ -604,10 +606,14 @@ class  icarogw_catalog(object):
                     if not loaded_sch:                
                         band = pcat[self.grouping][self.subgrouping].attrs['band']
                         epsilon = pcat[self.grouping][self.subgrouping].attrs['epsilon']
+                        try:
+                            self.LLstarcut = pcat[self.grouping][self.subgrouping].attrs['LLstarcut']
+                        except:
+                            self.LLstarcut = None
                         self.band = band
                         self.epsilon = epsilon
                         self.calc_kcorr=kcorr(band)
-                        self.sch_fun=galaxy_MF(band=band)
+                        self.sch_fun=galaxy_MF(band=band,LLstarcut = self.LLstarcut)
                         self.sch_fun.build_effective_number_density_interpolant(epsilon)
                         # Initialize a cosmology with zmax at double the distance
                         cosmology_proxy = astropycosmology(zmax=self.z_grid[-1]*2)
@@ -642,6 +648,8 @@ class  icarogw_catalog(object):
             subgroup = icat[self.grouping].require_group(self.subgrouping)
             subgroup.attrs['epsilon'] = self.epsilon
             subgroup.attrs['band'] = self.band
+            if self.LLstarcut is not None:
+                subgroup.attrs['LLstarcut'] = self.LLstarcut
             subgroup.create_dataset('vals_interpolant',data=self.dNgal_dzdOm_vals)
             subgroup.create_dataset('bg_vals_interpolant',data=self.bg_vals)
 
@@ -654,12 +662,16 @@ class  icarogw_catalog(object):
             self.moc_mthr_map = HealpixMap(data=icat[self.grouping]['mthr_moc_map'][:],uniq=icat[self.grouping]['uniq_moc_map'][:])
             self.z_grid = icat[self.grouping]['z_grid'][:]
             self.band = icat[self.grouping][self.subgrouping].attrs['band']
+            try:
+                self.LLstarcut = icat[self.grouping][self.subgrouping].attrs['LLstarcut']
+            except:
+                self.LLstarcut = None
             self.epsilon = icat[self.grouping][self.subgrouping].attrs['epsilon']
             self.dNgal_dzdOm_vals = icat[self.grouping][self.subgrouping]['vals_interpolant'][:]
             self.bg_vals = icat[self.grouping][self.subgrouping]['bg_vals_interpolant'][:]
          
         self.calc_kcorr=kcorr(self.band)
-        self.sch_fun=galaxy_MF(band=self.band)
+        self.sch_fun=galaxy_MF(band=self.band,LLstarcut = self.LLstarcut)
         self.sch_fun.build_effective_number_density_interpolant(self.epsilon)           
         # Sorted uniq grid
         self.sky_grid = np.arange(0,len(self.moc_mthr_map.data),1).astype(int)
