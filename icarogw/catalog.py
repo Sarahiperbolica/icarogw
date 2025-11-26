@@ -495,7 +495,7 @@ def calculate_interpolant_files(outfolder,z_grid,pixel,grouping,subgrouping,
         '''
        
         calc_kcorr=kcorr(band)
-        sch_fun=galaxy_MF(band=band,LLstarcut=None)
+        sch_fun=galaxy_MF(band=band,LLstarcut=LLstarcut)
         sch_fun.build_MF(cosmo_ref)
         sch_fun.build_effective_number_density_interpolant(epsilon)
 
