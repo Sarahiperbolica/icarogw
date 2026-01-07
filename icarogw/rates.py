@@ -1414,7 +1414,7 @@ class CBC_vanilla_rate_cosmological_coupling(object):
         log_dVc_dz=xp.log(self.cw.cosmology.dVc_by_dzdOmega_at_z(z)*4*xp.pi)
         
         # Sum over posterior samples in Eq. 1.1 on the icarogw2.0 document
-        log_weights=self.mw.log_pdf(ms1_k0,ms2_k0)+self.rw.rate.log_evaluate(z)+log_dVc_dz + self.k_coupling*xp.log1p(z) \
+        log_weights=self.mw.log_pdf(ms1_k0,ms2_k0)+self.rw.rate.log_evaluate(z)+log_dVc_dz + 2*self.k_coupling*xp.log1p(z) \
         -xp.log(prior)-xp.log(detector2source_jacobian(z,self.cw.cosmology))-xp.log1p(z)
         
         if self.sw is not None:
