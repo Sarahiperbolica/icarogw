@@ -401,6 +401,8 @@ class galaxy_MF(object):
             W1, K or bJ band. Others are not implemented
         Mmin, Mmax,Mstar,alpha,phistar: float
             Minimum, maximum absolute magnitude. Knee-absolute magnitude (for h=1), Powerlaw factor and galaxy number density per Gpc-3 
+        LLstarcut: float
+            L/L* where to cut the Schecter function, must be brighter than faint end
         '''
         # Note, we convert phistar to Gpc-3
         if band is None:
