@@ -703,8 +703,8 @@ class spinprior_default_gaussian_zeroed(object):
         
     def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source, mass_2_source):
         xp = get_module_array(chi_1)
-        amax_1 = xp.where(mass_1_source<2.5, 0.4, 1.0) # To be consistent with injections
-        amax_2 = xp.where(mass_2_source<2.5, 0.4, 1.0)  # To be consistent with injections
+        amax_1 = xp.where(mass_1_source<2.0, 0.4, 1.0) # To be consistent with injections
+        amax_2 = xp.where(mass_2_source<2.0, 0.4, 1.0)  # To be consistent with injections
         log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
                                     xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
 
