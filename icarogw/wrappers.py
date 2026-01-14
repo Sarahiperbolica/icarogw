@@ -580,7 +580,7 @@ class spinprior_default_gaussian_window_gaussian(object):
     def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
         
         xp = get_module_array(chi_1)
-        
+        # self.mix_f is \lambda_f in the Eqs in the overleaf (defines the value of the window function at m=0)
         wz_1 = _mixed_double_sigmoid_function(x=mass_1_source, xt=self.mt, delta_xt=self.delta_mt, mix_x0=self.mix_f, mix_x1=0.)
         wz_2 = _mixed_double_sigmoid_function(x=mass_2_source, xt=self.mt, delta_xt=self.delta_mt, mix_x0=self.mix_f, mix_x1=0.)
 
