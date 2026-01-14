@@ -1256,7 +1256,7 @@ class BrokenPowerLawTripleMultiPeak(basic_1dimpdf):
         xp = get_module_array(x) 
         log_bpl = xp.log1p(-self.lambdag) + self.BPL.log_pdf(x)
         log_g1  = xp.log(self.lambdag) + xp.log(self.lambda1) + self.TG1.log_pdf(x)
-        log_g2  = xp.log(self.lambdag) + xp.log1p(-self.lambda1) + self.TG2.log_pdf(x)
+        log_g2  = xp.log(self.lambdag) + xp.log1p(-self.lambda1) + xp.log(self.lambda2) + self.TG2.log_pdf(x)
         log_g3  = xp.log(self.lambdag) + xp.log1p(-self.lambda1) + xp.log1p(-self.lambda2) + self.TG3.log_pdf(x)
         return xp.logaddexp(xp.logaddexp(xp.logaddexp(log_bpl,log_g1),log_g2),log_g3)
     
