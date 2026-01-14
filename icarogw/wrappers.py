@@ -417,6 +417,43 @@ class m1m2_paired_massratio_bplmulti_dip(pm1m2_prob):
         
         self.prior=paired_2dimpdf(p,pairing_function)
 
+# Need to be reviewed for O4b
+class m1m2_paired_massratio_bpl_2peaks(pm1m2_prob):
+    '''
+    BPL + 2peaks for BBHs
+    '''
+    def __init__(self):
+        wrapper_m = massprior_BrokenPowerLawMultiPeak()
+        wrapper_m.population_parameters.remove('b')
+        self.population_parameters = wrapper_m.population_parameters + ['beta_bottom','beta_top','bottomsmooth', 'topsmooth', 
+                                                                        'leftdip','rightdip','leftdipsmooth', 
+                                                                        'rightdipsmooth','deep']
+        self.wrapper_m = wrapper_m
+    def update(self,**kwargs):
+        mbreak_NS = kwargs['leftdip'] + kwargs['leftdipsmooth']
+        mbreak_BH = kwargs['rightdip'] - kwargs['rightdipsmooth']
+        mbreak = 0.5*(mbreak_NS+mbreak_BH)
+        kwargs['b'] = (mbreak-kwargs['mmin'])/(kwargs['mmax']-kwargs['mmin'])
+        self.wrapper_m.update(**{key:kwargs[key] for key in self.wrapper_m.population_parameters+['b']})
+        p = SmoothedPlusDipProb(self.wrapper_m.prior,**{key:kwargs[key] for key in ['bottomsmooth', 'topsmooth', 
+                                                                        'leftdip', 'rightdip', 
+                                                                        'leftdipsmooth','rightdipsmooth','deep']})
+        
+        def pairing_function(m1,m2,beta_bottom=kwargs['beta_bottom'],beta_top=kwargs['beta_top'],mbreak=mbreak):
+            # The motivation for using only m2 for beta top and bottom is that if m2 is a NS for sure 
+            # it is more probable that the binary comes from isolated stellar binaries.
+            xp = get_module_array(m1)
+            q = m2/m1
+            toret = xp.ones_like(q)
+            idx = m2<=mbreak
+            toret[idx] = xp.power(q[idx],beta_bottom)
+            idx = m2>mbreak
+            toret[idx] = xp.power(q[idx],beta_top)
+            toret[q>1] = 0.
+            return toret
+        
+        self.prior=paired_2dimpdf(p,pairing_function)
+
 
 
 #LVK reviewed

@@ -1253,6 +1253,7 @@ class BrokenPowerLawTripleMultiPeak(basic_1dimpdf):
         self.TG3=TruncatedGaussian(meang3,sigmag3,ming3,maxg3)
 
     def _log_pdf(self, x):
+        # fixed the weight of G2
         xp = get_module_array(x) 
         log_bpl = xp.log1p(-self.lambdag) + self.BPL.log_pdf(x)
         log_g1  = xp.log(self.lambdag) + xp.log(self.lambda1) + self.TG1.log_pdf(x)
