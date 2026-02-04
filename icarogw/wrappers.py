@@ -1752,3 +1752,101 @@ class GaussianEvolving():
     
     def return_mu_sigma(self):
         return self.muz, self.sigmaz
+
+##################### SPIN - MASS - REDSHIFT Correlation models ####################
+
+class spinprior_linear_chieff_q(object):
+    '''
+    Definition
+    ----------
+    Wrapper for the evolving spin model chi-eff-q inspired from: https://arxiv.org/pdf/2508.18083
+    p(chi_eff | q) = Truncated Gaussian on [-1, 1]
+    with mean and log-variance linear in q = m2/m1
+    
+    Parameters
+    ----------
+    mu_chieff_0, mu_chieff_1: parameters for the linear evolution of the mean of the Gaussian
+    ln_sigma_chieff_0,ln_sigma_chieff_1:  parameters for the linear evolution of the ln of the Gaussian width
+    x0: pivot value, default is 0.
+    
+    '''
+    def __init__(self):
+        self.population_parameters=['mu_chieff_0','mu_chieff_1','ln_sigma_chieff_0','ln_sigma_chieff_1','x0']
+        self.event_parameters=['chi_eff','mass_1_source','mass_2_source']
+
+    def update(self,**kwargs):
+        self.mu_chieff_0 = kwargs['mu_chieff_0']
+        self.mu_chieff_1 = kwargs['mu_chieff_1']
+        self.ln_sigma_chieff_0 = kwargs['ln_sigma_chieff_0']
+        self.ln_sigma_chieff_1 = kwargs['ln_sigma_chieff_1']
+        self.x0 = kwargs['x0']
+
+    def calculate_mu_chieff(self,q):
+        return self.mu_chieff_0 + self.mu_chieff_1*(q - self.x0)
+        
+    def calculate_ln_sigma_chieff(self,q):
+        return self.ln_sigma_chieff_0 + self.ln_sigma_chieff_1*(q - self.x0)
+    
+    def log_pdf(self,chi_eff,mass_1_source,mass_2_source):
+        xp = get_module_array(mass_1_source)
+        q = mass_2_source / mass_1_source
+        
+        mu = self.calculate_mu_chieff(q)
+        ln_sigma = self.calculate_ln_sigma_chieff(q)
+        sigma = xp.exp(ln_sigma)
+        # clipping to avoid issue of normalization and dirac like behavior ? sigma = np.exp(np.clip(ln_sigma, -10, 2)) 
+        
+        dist = TruncatedGaussian(mu,sigma,-1.,1.)
+        return dist.log_pdf(chi_eff)
+         
+    def pdf(self,chi_eff,mass_1_source,mass_2_source):
+        xp = get_module_array(mass_1_source)
+        return xp.exp(self.log_pdf(chi_eff,mass_1_source,mass_2_source))
+
+class spinprior_linear_chieff_z(object):
+    '''
+    Definition
+    ----------
+    Wrapper for the evolving spin model chi-eff-z inspired from: https://arxiv.org/pdf/2508.18083
+    p(chi_eff | z) = Truncated Gaussian on [-1, 1]
+    with mean and log-variance linear in z
+    
+    Parameters
+    ----------
+    mu_chieff_0, mu_chieff_1
+        parameters for the linear evolution of the mean of the Gaussian
+    ln_sigma_chieff_0,ln_sigma_chieff_1
+        parameters for the linear evolution of the ln of the Gaussian width
+    x0
+        pivot value, default is 0.
+    
+    '''
+    def __init__(self):
+        self.population_parameters=['mu_chieff_0','mu_chieff_1','ln_sigma_chieff_0','ln_sigma_chieff_1','x0']
+        self.event_parameters=['chi_eff','luminosity_distance']
+
+    def update(self,**kwargs):
+        self.mu_chieff_0 = kwargs['mu_chieff_0']
+        self.mu_chieff_1 = kwargs['mu_chieff_1']
+        self.ln_sigma_chieff_0 = kwargs['ln_sigma_chieff_0']
+        self.ln_sigma_chieff_1 = kwargs['ln_sigma_chieff_1']
+        self.x0 = kwargs['x0']
+
+    def calculate_mu_chieff(self,z):
+        return self.mu_chieff_0 + self.mu_chieff_1*(z - self.x0)
+        
+    def calculate_ln_sigma_chieff(self,z):
+        return self.ln_sigma_chieff_0 + self.ln_sigma_chieff_1*(z - self.x0)
+
+    def log_pdf(self,chi_eff,z):
+        xp = get_module_array(chi_eff)
+        mu = self.calculate_mu_chieff(z)
+        ln_sigma = self.calculate_ln_sigma_chieff(z)
+        sigma = xp.exp(ln_sigma)
+        
+        dist = TruncatedGaussian(mu,sigma,-1.,1.)
+        return dist.log_pdf(chi_eff)
+         
+    def pdf(self,chi_eff,z):
+        xp = get_module_array(chi_eff)
+        return xp.exp(self.log_pdf(chi_eff,z))
