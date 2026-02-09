@@ -7,6 +7,7 @@ from .priors import PowerLawStationary, PowerLawLinear, GaussianStationary, Gaus
 from .priors import BrokenPowerLawTripleMultiPeak
 import copy
 from astropy.cosmology import FlatLambdaCDM, FlatwCDM, Flatw0waCDM
+from scipy.special import expit
 
 modgravity_wrappers = ['eps0_mod_wrap','Xi0_mod_wrap','extraD_mod_wrap',
                       'cM_mod_wrap','alphalog_mod_wrap']
@@ -145,6 +146,57 @@ class pm_prob(object):
         return self.prior.pdf(mass_1_source)
     def log_pdf(self,mass_1_source):
         return self.prior.log_pdf(mass_1_source)
+
+
+######################################################################
+
+class massratio_PowerlawSmooth(object):
+    '''
+    Conditional mass-ratio distribution
+    p(q | m1) \propto q^{alpha_q}
+    for q in [mmin / m1, 1], with smoothing in m2 = q m1
+    '''
+    def __init__(self, mw):
+        self.population_parameters = ['alpha_q','delta_m']
+        self.mw = mw
+
+    def update(self, **kwargs):
+        self.alpha_q = kwargs['alpha_q']
+        self.delta_m = kwargs['delta_m']
+        
+    def pdf(self, mass_ratio, mass_1):
+        mmin = self.mw.prior.minval
+        qmin = mmin / mass_1 
+        p_q = PowerLaw(qmin, 1., self.alpha_q)
+        p_s = onesided_taperwindow_smoothing(mass=mass_1*mass_ratio,
+                                        mmin = mmin,
+                                        mmax = mass_1,
+                                        delta_m = self.delta_m)
+        # Not normalized anymore but should be ok with scale-free inferences.
+        return p_q.pdf(mass_ratio)*p_s
+        
+    def log_pdf(self, mass_ratio, mass_1):
+        return np.log(self.pdf(mass_ratio, mass_1))
+
+def onesided_taperwindow_smoothing(mass, mmin, mmax, delta_m):
+    '''
+    Apply a one-sided Planck-taper window between mmin and mmin+delta_m.
+    S = (1 + exp[ 1/x - 1/(1-x) ])^{-1}
+    with x = (m - mmin) / delta_m
+    '''
+    if delta_m <= 0:
+        return np.ones_like(mass)
+
+    x = (mass - mmin) / delta_m
+    x = np.clip(x, 1e-6, 1.0 - 1e-6)
+    
+    exponent = 1.0 / x - 1.0 / (1.0 - x)
+    window = expit(-exponent)
+    window *= (mass >= mmin) & (mass <= mmax)
+    return window
+    
+######################################################################
+
 
 class mass_ratio_prior_Gaussian(pm_prob):
     def __init__(self):

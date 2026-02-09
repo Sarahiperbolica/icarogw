@@ -1660,14 +1660,14 @@ class CBC_rate_m1q_z_chieffq(object):
         m2s = m1s*kwargs['mass_ratio']
 
         # weights for PEs
-        # w = 1/prior_{PE} * dN/(dm1d dq ddL dtd dchi) 
-        # w = 1/prior_{PE} * dN/(dm1s dq dVc dts dchi) * dVc/dz * 1/|J_d->s| * 1/(1+z) 
-        # w = 1/prior * p(m1,q)p(z)p(chi_eff|q) * dVc/dz * 1/|J_d->s| * 1/(1+z) 
+        # w = 1/prior_{PE} * dN/(dm1d dq ddL dtd dchi) * 1/|J_(m1,m2)->(m1,q)|
+        # w = 1/prior_{PE} * dN/(dm1s dq dVc dts dchi) * dVc/dz * 1/|J_d->s| * 1/(1+z) * 1/m1
+        # w = 1/prior * p(m1,q)p(z)p(chi_eff|q) * dVc/dz * 1/|J_d->s| * 1/(1+z) * 1/m1
         # note: no Jacobian for the spins since chieff is not redshifted
         log_dVc_dz   = xp.log(self.cw.cosmology.dVc_by_dzdOmega_at_z(z)*4*xp.pi)
         log_prior    = xp.log(prior)
-        log_jacobian = xp.log(detector2source_jacobian_q(z, self.cw.cosmology)) + xp.log1p(z)
-        log_pop      = self.mw.log_pdf(m1s)+self.qw.log_pdf(kwargs['mass_ratio'])+self.rw.log_evaluate(z)+self.sw.log_pdf(kwargs['chi_eff'],m1s,m2s)
+        log_jacobian = xp.log(detector2source_jacobian_q(z, self.cw.cosmology)) + xp.log1p(z) + xp.log(m1s)
+        log_pop      = self.mw.log_pdf(m1s)+self.qw.log_pdf(kwargs['mass_ratio'],m1s)+self.rw.log_evaluate(z)+self.sw.log_pdf(kwargs['chi_eff'],m1s,m2s)
         log_weights  = log_pop + log_dVc_dz - log_prior - log_jacobian
 
         if not self.scale_free:
@@ -1720,14 +1720,14 @@ class CBC_rate_m1q_z_chieffz(object):
         m1s = kwargs['mass_1']/(1.+z)
 
         # weights for PEs
-        # w = 1/prior_{PE} * dN/(dm1d dq ddL dtd dchi) 
-        # w = 1/prior_{PE} * dN/(dm1s dq dVc dts dchi) * dVc/dz * 1/|J_d->s| * 1/(1+z) 
-        # w = 1/prior * p(m1,q)p(z)p(chi_eff|z) * dVc/dz * 1/|J_d->s| * 1/(1+z) 
+        # w = 1/prior_{PE} * dN/(dm1d dq ddL dtd dchi) * 1/|J_(m1,m2)->(m1,q)|
+        # w = 1/prior_{PE} * dN/(dm1s dq dVc dts dchi) * dVc/dz * 1/|J_d->s| * 1/(1+z) * 1/m1
+        # w = 1/prior * p(m1,q)p(z)p(chi_eff|z) * dVc/dz * 1/|J_d->s| * 1/(1+z) * 1/m1
         # note: no Jacobian for the spins since chieff is not redshifted
         log_dVc_dz   = xp.log(self.cw.cosmology.dVc_by_dzdOmega_at_z(z)*4*xp.pi)
         log_prior    = xp.log(prior)
-        log_jacobian = xp.log(detector2source_jacobian_q(z, self.cw.cosmology)) + xp.log1p(z)
-        log_pop      = self.mw.log_pdf(m1s)+self.qw.log_pdf(kwargs['mass_ratio'])+self.rw.log_evaluate(z)+self.sw.log_pdf(kwargs['chi_eff'],z)
+        log_jacobian = xp.log(detector2source_jacobian_q(z, self.cw.cosmology)) + xp.log1p(z) + xp.log(m1s)
+        log_pop      = self.mw.log_pdf(m1s)+self.qw.log_pdf(kwargs['mass_ratio'],m1s)+self.rw.log_evaluate(z)+self.sw.log_pdf(kwargs['chi_eff'],z)
         log_weights  = log_pop + log_dVc_dz - log_prior - log_jacobian
 
         if not self.scale_free:
