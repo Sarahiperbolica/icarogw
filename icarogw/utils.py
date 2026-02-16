@@ -416,6 +416,7 @@ agroup='ligo.dev.o4.cbc.hubble.icarogw'):
     fp.write('subgrouping = \'{:s}\' \n'.format(subgrouping))
     fp.write('band = \'{:s}\' \n'.format(band))
     fp.write('epsilon = {:f} \n'.format(epsilon))
+    fp.write('LLstarcut = None \n')
     fp.write('ptype = \'{:s}\' \n'.format(ptype))
 
     

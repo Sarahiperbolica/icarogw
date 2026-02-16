@@ -1367,6 +1367,69 @@ class CBC_vanilla_rate(object):
             
         return log_out
 
+class CBC_vanilla_rate_cosmological_coupling(object):
+    def __init__(self,cosmology_wrapper,mass_wrapper,rate_wrapper,spin_wrapper=None,scale_free=False):
+        
+        self.cw = cosmology_wrapper
+        self.mw = mass_wrapper
+        self.rw = rate_wrapper
+        self.sw = spin_wrapper
+        self.scale_free = scale_free
+        
+        if scale_free:
+            self.population_parameters =  self.cw.population_parameters+self.mw.population_parameters+self.rw.population_parameters
+        else:
+            self.population_parameters =  self.cw.population_parameters+self.mw.population_parameters+self.rw.population_parameters + ['R0']
+
+        self.population_parameters = self.population_parameters + ['k_coupling']             
+        event_parameters = ['mass_1', 'mass_2', 'luminosity_distance']
+        
+        if self.sw is not None:
+            self.population_parameters = self.population_parameters+self.sw.population_parameters
+            event_parameters = event_parameters + self.sw.event_parameters
+
+        self.PEs_parameters = event_parameters.copy()
+        self.injections_parameters = event_parameters.copy()
+            
+    def update(self,**kwargs):
+        self.cw.update(**{key: kwargs[key] for key in self.cw.population_parameters})
+        self.mw.update(**{key: kwargs[key] for key in self.mw.population_parameters})
+        self.rw.update(**{key: kwargs[key] for key in self.rw.population_parameters})
+        self.k_coupling = kwargs['k_coupling']
+        
+        if self.sw is not None:
+            self.sw.update(**{key: kwargs[key] for key in self.sw.population_parameters})
+            
+        if not self.scale_free:
+            self.R0 = kwargs['R0']
+        
+    def log_rate_PE(self,prior,**kwargs):
+        xp = get_module_array(prior)
+
+        # These are the source masses estimated from the GW
+        ms1, ms2, z = detector2source(kwargs['mass_1'],kwargs['mass_2'],kwargs['luminosity_distance'],self.cw.cosmology) 
+        # Mass distribution in redshift or as it would be if there is no cosmo coupling
+        ms1_k0, ms2_k0 = ms1*xp.power(1+z,self.k_coupling), ms2*xp.power(1+z,self.k_coupling) 
+       
+        log_dVc_dz=xp.log(self.cw.cosmology.dVc_by_dzdOmega_at_z(z)*4*xp.pi)
+        
+        # Sum over posterior samples in Eq. 1.1 on the icarogw2.0 document
+        log_weights=self.mw.log_pdf(ms1_k0,ms2_k0)+self.rw.rate.log_evaluate(z)+log_dVc_dz + 2*self.k_coupling*xp.log1p(z) \
+        -xp.log(prior)-xp.log(detector2source_jacobian(z,self.cw.cosmology))-xp.log1p(z)
+        
+        if self.sw is not None:
+            log_weights+=self.sw.log_pdf(**{key:kwargs[key] for key in self.sw.event_parameters})
+            
+        if not self.scale_free:
+            log_out = log_weights + xp.log(self.R0)
+        else:
+            log_out = log_weights
+            
+        return log_out
+    
+    def log_rate_injections(self,prior,**kwargs):
+        return self.log_rate_PE(prior,**kwargs)
+
 
 class CBC_vanilla_rate_pseob(CBC_vanilla_rate):
     def __init__(self,cosmology_wrapper,mass_wrapper,rate_wrapper,pseob_wrapper,spin_wrapper=None,scale_free=False):

@@ -837,6 +837,54 @@ class spinprior_default_gaussian(object):
 
 
 
+import numpy as np
+from scipy.stats import truncnorm
+
+def log_truncnorm_pdf(x, mean, std, lower, upper):
+    # Standardize bounds
+    a = (lower - mean) / std
+    b = (upper - mean) / std
+    # Standardize x
+    x_std = (x - mean) / std
+
+    # Get the log PDF from the truncated normal
+    log_pdf = truncnorm.logpdf(x_std, a, b, loc=0, scale=1) - np.log(std)
+    return log_pdf
+
+class spinprior_default_gaussian_zeroed(object):
+    def __init__(self):
+        self.population_parameters=['mu_chi_1','mu_chi_2','sigma_chi_1','sigma_chi_2','sigma_t','csi_spin']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2']
+
+    def update(self,**kwargs):        
+        self.csi_spin = kwargs['csi_spin']
+        self.aligned_pdf = TruncatedGaussian(1.,kwargs['sigma_t'],-1.,1.)
+        self.mu_chi_1 = kwargs['mu_chi_1']
+        self.mu_chi_2 = kwargs['mu_chi_2']
+        self.sigma_chi_1 = kwargs['sigma_chi_1']
+        self.sigma_chi_2 = kwargs['sigma_chi_2']
+        
+    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source, mass_2_source):
+        xp = get_module_array(chi_1)
+        amax_1 = xp.where(mass_1_source<2.0, 0.4, 1.0) # To be consistent with injections
+        amax_2 = xp.where(mass_2_source<2.0, 0.4, 1.0)  # To be consistent with injections
+        log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
+                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
+
+        log_g1 = log_truncnorm_pdf(chi_1,self.mu_chi_1,self.sigma_chi_1,0.,amax_1)
+        log_g2 = log_truncnorm_pdf(chi_2,self.mu_chi_2,self.sigma_chi_2,0.,amax_2)
+        
+        return log_g1+log_g2+log_angular_part
+        
+    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source, mass_2_source):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source, mass_2_source))
+
+
+
+
+
+
 ########### TGR Implementation ######################
 class pseobprior_gaussian(object):
     def __init__(self):
