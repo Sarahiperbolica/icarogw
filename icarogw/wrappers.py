@@ -2765,8 +2765,64 @@ class spinprior_HBH(object):
 
         return chi_1_samples, chi_2_samples, cos_t_1_sample, cos_t_2_sample
 
+class spinprior_AGN(object):
+    def __init__(self,mindelta_AGN=0.1):
+        # Minimum value of delta and chi for stability
+        self.mindelta_AGN = mindelta_AGN
 
-# PBH pop pdf: gaussian on chi_1, chi_2 with small sigma and mean value dependent from the masses
+        #population parameters
+        self.population_parameters= ['chi_max_1g','mean_chi_2g','sigma_chi_2g',
+                                     'f_1g_m_0','f_1g_m_inf','f_1g_mt','f_1g_delta_mt','delta_0', 'delta_dot_0']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2','mass_1_source','mass_2_source']
+    
+        self.name='spinprior_AGN'
+
+    def update(self,**kwargs):
+        
+        self.chi_max_1g = kwargs['chi_max_1g']
+        self.mean_chi_2g = kwargs['mean_chi_2g']
+        self.sigma_chi_2g = kwargs['sigma_chi_2g']
+        self.f_1g_m_0 = kwargs['f_1g_m_0']
+        self.f_1g_m_inf = kwargs['f_1g_m_inf']
+        self.f_1g_mt = kwargs['f_1g_mt']
+        self.f_1g_delta_mt = kwargs['f_1g_delta_mt']
+        self.delta_0 = kwargs['delta_0']       
+        self.delta_dot_0 = kwargs['delta_dot_0']
+
+    def log_pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
+
+        #choose module between numpy and cupy
+        xp = get_module_array(chi_1)
+
+        delta_1 = self.delta_0+self.delta_dot_0*(mass_1_source/30.)
+        delta_2 = self.delta_0+self.delta_dot_0*(mass_2_source/30.)
+
+        # Clip to minimal and maximum values for numerical stability
+        delta_1 = np.clip(delta_1,self.mindelta_AGN,4.)
+        delta_2 = np.clip(delta_2,self.mindelta_AGN,4.)
+
+        # Chi distributions
+        p1g1g = log_tgaussian(chi_1,0.,1.,0.,self.chi_max_1g) + log_tgaussian(chi_2,0.,1.,0.,self.chi_max_1g)
+        p2g1g = log_tgaussian(chi_1,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) + log_tgaussian(chi_2,0.,1.,0.,self.chi_max_1g)
+        p1g2g = log_tgaussian(chi_2,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) + log_tgaussian(chi_1,0.,1.,0.,self.chi_max_1g)
+        p2g2g = log_tgaussian(chi_2,0.,1.,self.mean_chi_2g,self.sigma_chi_2g) + log_tgaussian(chi_1,0.,1.,self.mean_chi_2g,self.sigma_chi_2g)
+        
+        f1gm1 = _mixed_double_sigmoid_function(mass_1_source,self.f_1g_mt,self.f_1g_delta_mt,self.f_1g_m_0,self.f_1g_m_inf)
+        f1gm2 = _mixed_double_sigmoid_function(mass_2_source,self.f_1g_mt,self.f_1g_delta_mt,self.f_1g_m_0,self.f_1g_m_inf)
+
+        # Costheta distributions
+        a1 = log_tgaussian(cos_t_1,-1.,1.,1.,delta_1)
+        a2 = log_tgaussian(cos_t_2,-1.,1.,1.,delta_2)
+
+        pout = f1gm1*f1gm2*xp.exp(p1g1g) + f1gm1*(1-f1gm2)*xp.exp(p1g2g) + (1-f1gm1)*f1gm2*xp.exp(p2g1g) + (1-f1gm1)*(1-f1gm2)*xp.exp(p2g2g) 
+
+        return xp.log(pout) + a1 + a2
+        
+    def pdf(self,chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2,mass_1_source,mass_2_source))   
+
+# PBH pop pdf: gaussian on chi_1, chi_2 with small sigma and mean value dependent from the masses    
 class spinprior_PBH_smeared(object):
     def __init__(self):
 
@@ -2806,8 +2862,6 @@ class spinprior_PBH_smeared(object):
             + xp.log(0.5)
             + xp.log(0.5)
         )
-
-        # print("\nPBH: ", out)
 
         return out
 
@@ -2918,13 +2972,14 @@ class spinprior_IBH(object):
 
     def pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source):
         xp = get_module_array(chi_1)
-        print(
-            xp.exp(
-                self.log_pdf(
-                    chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source
-                )
-            )
-        )
+        # print(
+        #     xp.exp(
+        #         self.log_pdf(
+        #             chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source
+        #         )
+        #     )
+        # )
+        
         return xp.exp(
             self.log_pdf(chi_1, chi_2, cos_t_1, cos_t_2, mass_1_source, mass_2_source)
         )
@@ -3006,3 +3061,25 @@ class spinprior_IBH(object):
         )
 
         return chi_1_samples, chi_2_samples, cos_t_1_samples, cos_t_2_samples
+        
+
+class spinprior_default_gaussian_component_spins(object):
+    def __init__(self):
+        self.population_parameters=['mu_chi','sigma_chi','mu_t','sigma_t','csi_spin']
+        self.event_parameters=['chi_1','chi_2','cos_t_1','cos_t_2']
+
+    def update(self,**kwargs):        
+        self.csi_spin = kwargs['csi_spin']
+        self.aligned_pdf = TruncatedGaussian(kwargs['mu_t'],kwargs['sigma_t'],-1.,1.)
+        self.g1 = TruncatedGaussian(kwargs['mu_chi'],kwargs['sigma_chi'],0.,1.)
+        self.g2 = TruncatedGaussian(kwargs['mu_chi'],kwargs['sigma_chi'],0.,1.)
+    
+    def log_pdf(self,mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2):
+        xp = get_module_array(chi_1)
+        log_angular_part = xp.logaddexp(xp.log1p(-self.csi_spin)+xp.log(0.25),
+                                    xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
+        return self.g1.log_pdf(chi_1)+self.g2.log_pdf(chi_2)+log_angular_part
+        
+    def pdf(self,mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2):
+        xp = get_module_array(chi_1)
+        return xp.exp(self.log_pdf(mass_1_source,mass_2_source,chi_1,chi_2,cos_t_1,cos_t_2))

@@ -99,6 +99,56 @@ class CBC_astro_rate_spin_3pops(object):
     def log_rate_injections(self,prior,**kwargs):    
         return self.log_rate_PE(prior,**kwargs)
 
+class CBC_astro_rate_spin_3pops(object):
+    def __init__(self,IBH_rate,HBH_rate,PBH_rate,common_pop_parameters=[]):
+        self.scale_free = False
+        
+        self.IBH_rate = IBH_rate
+        self.HBH_rate = HBH_rate
+        self.PBH_rate = PBH_rate
+
+        mass_pars = [kk+'_IBH' for kk in IBH_rate.mw.population_parameters if kk not in common_pop_parameters] + \
+            [kk+'_HBH' for kk in HBH_rate.mw.population_parameters if kk not in common_pop_parameters] + \
+                [kk+'_PBH' for kk in PBH_rate.mw.population_parameters if kk not in common_pop_parameters]
+        rate_pars = [kk+'_IBH' for kk in IBH_rate.rw.population_parameters if kk not in common_pop_parameters] + \
+            [kk+'_HBH' for kk in HBH_rate.rw.population_parameters if kk not in common_pop_parameters] + \
+                [kk+'_PBH' for kk in PBH_rate.rw.population_parameters if kk not in common_pop_parameters]
+        spin_pars = [kk+'_IBH' for kk in IBH_rate.sw.population_parameters if kk not in common_pop_parameters] + \
+              [kk+'_HBH' for kk in HBH_rate.sw.population_parameters if kk not in common_pop_parameters] + \
+                  [kk+'_PBH' for kk in PBH_rate.sw.population_parameters if kk not in common_pop_parameters]
+
+        self.population_parameters =  IBH_rate.cw.population_parameters+mass_pars+rate_pars+spin_pars+['R0_IBH','R0_HBH','R0_PBH'] + common_pop_parameters
+            
+        event_parameters = ['mass_1', 'mass_2', 'luminosity_distance', 'chi_1', 'chi_2', 'cos_t_1', 'cos_t_2']
+     
+        self.PEs_parameters = event_parameters.copy()
+        self.injections_parameters = event_parameters.copy()
+            
+    def update(self,**kwargs):
+
+        self.IBH_rate.update_all_but_cosmo(**{key.replace('_IBH',''): kwargs[key] for key in self.population_parameters})
+        self.HBH_rate.update_all_but_cosmo(**{key.replace('_HBH',''): kwargs[key] for key in self.population_parameters})
+        self.PBH_rate.update_all_but_cosmo(**{key.replace('_PBH',''): kwargs[key] for key in self.population_parameters})
+        
+        self.IBH_rate.cw.update(**{key.replace('_IBH',''): kwargs[key] for key in self.IBH_rate.cw.population_parameters})
+        self.HBH_rate.cw = self.IBH_rate.cw
+        self.PBH_rate.cw = self.IBH_rate.cw
+
+    def log_rate_PE(self,prior,**kwargs):
+
+        xp = get_module_array(prior)
+
+        log_R1 = self.IBH_rate.log_rate_PE(prior, **kwargs)
+        log_R2 = self.HBH_rate.log_rate_PE(prior, **kwargs)
+        log_R3 = self.PBH_rate.log_rate_PE(prior, **kwargs)
+
+        log_sum_12 = xp.logaddexp(log_R1, log_R2)
+        log_sum_123 = xp.logaddexp(log_sum_12, log_R3)
+        return log_sum_123
+
+    def log_rate_injections(self,prior,**kwargs):    
+        return self.log_rate_PE(prior,**kwargs)
+
 
 class CBC_rate_mchirp_q(object):
     '''
