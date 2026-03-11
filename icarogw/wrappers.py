@@ -591,7 +591,7 @@ class spinprior_default_gaussian_bis(object):
                                     xp.log(self.csi_spin)+self.aligned_pdf.log_pdf(cos_t_1)+self.aligned_pdf.log_pdf(cos_t_2))
         return self.g.log_pdf(chi_1)+self.g.log_pdf(chi_2)+log_angular_part
         
-    def pdfdef log_pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, **kwargs):
+    def pdf(self, chi_1, chi_2, cos_t_1, cos_t_2, **kwargs):
         xp = get_module_array(chi_1)
         return xp.exp(self.log_pdf(chi_1,chi_2,cos_t_1,cos_t_2))
 
