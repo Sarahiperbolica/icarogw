@@ -1,6 +1,15 @@
 import numpy as np
 import matplotlib.pylab as plt
 import astropy.constants
+from pycbc.waveform import get_fd_waveform
+from icarogw import stochastic
+
+# ----------------------------
+# Constants (SI)
+# ----------------------------
+G_SI = 6.67430e-11
+C_SI = 2.99792458e8
+MPC_SI = 3.085677581491367e22
 
 def v(Mtot,f):
     '''
@@ -16,7 +25,7 @@ def v(Mtot,f):
     MsunToSec = astropy.constants.M_sun.value*astropy.constants.G.value/np.power(astropy.constants.c.value,3.)
     return np.array([(np.pi*MsunToSec*f*Mtot)**(1./3.), (np.pi*MsunToSec*f*Mtot)**(2./3.), (np.pi*MsunToSec*f*Mtot)])
 
-def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None):
+def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None,approximant=False):
 
     """
     Function to compute the energy spectrum radiated by a CBC. Taken from (https://ui.adsabs.harvard.edu/abs/2023arXiv231017625T/abstract)
@@ -92,6 +101,66 @@ def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None):
             dEdf_spectrum[merger] = w_m*np.power(freqs[merger],2./3.)*np.power(1.+eps.dot(vs[:,merger]),2.)/fMerge
             dEdf_spectrum[ringdown] = w_r*np.square(freqs[ringdown]/(1.+np.square((freqs[ringdown]-fRing)/(sigma/2.))))/(fMerge*fRing**(4./3.))
 
+        if approximant:
+            
+            APPROXIMANT = "IMRPhenomXPHM"
+            delta = np.sqrt(1 - 4*eta)
+            MASS1 = 0.5 * Mtot * (1 + delta)
+            MASS2 = 0.5 * Mtot * (1 - delta)
+            F_LOWER = min(freqs)         # Hz
+            F_FINAL = max(freqs)      # Hz
+            DELTA_F = freqs[1] - freqs[0]  # Hz
+
+            SPIN1X = 0.0
+            SPIN1Y = 0.0
+            SPIN1Z = 0.0
+
+            SPIN2X = 0.0
+            SPIN2Y = 0.0
+            SPIN2Z = 0.0
+
+            # Placeholders
+            DISTANCE_MPC = 500.0  # Mpc
+            INCLINATION = 0.0  # radians
+            COA_PHASE = 0.0
+            
+            hp, hc = get_fd_waveform(
+                approximant=APPROXIMANT,
+                mass1=MASS1,
+                mass2=MASS2,
+                delta_f=DELTA_F,
+                f_lower=F_LOWER,
+                f_final=F_FINAL,
+                distance=DISTANCE_MPC,
+                spin1x=SPIN1X,
+                spin1y=SPIN1Y,
+                spin1z=SPIN1Z,
+                spin2x=SPIN2X,
+                spin2y=SPIN2Y,
+                spin2z=SPIN2Z,
+                inclination=INCLINATION,
+                coa_phase=COA_PHASE,
+            )
+
+            hp_arr = hp.numpy()
+            hc_arr = hc.numpy()
+            
+            freqs_wf = hp.sample_frequencies.numpy()
+
+            distance_si = DISTANCE_MPC * MPC_SI
+
+            hp_interp = np.interp(freqs, freqs_wf, hp_arr, left=0.0, right=0.0)
+            hc_interp = np.interp(freqs, freqs_wf, hc_arr, left=0.0, right=0.0)
+
+            # Waveform-based energy spectrum (line-of-sight dependent)
+            dEdf_spectrum = (
+                (np.pi**2 * C_SI**3) / (2.0 * G_SI)
+                * distance_si**2
+                * freqs**2
+                * 2
+                * (np.abs(hp_interp)**2 + np.abs(hc_interp)**2)
+            )
+            
         else:
 
             # Waveform model from Ajith+ 2008 (10.1103/PhysRevD.77.104017)
@@ -114,9 +183,12 @@ def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None):
 
 
     # Normalization
-    Mc = np.power(eta,3./5.)*Mtot*Msun
-    amp = np.power(G*np.pi,2./3.)*np.power(Mc,5./3.)/3.
-    return amp*dEdf_spectrum
+    if not approximant:
+        Mc = np.power(eta,3./5.)*Mtot*Msun
+        amp = np.power(G*np.pi,2./3.)*np.power(Mc,5./3.)/3.
+        return amp*dEdf_spectrum
+    else:
+        return dEdf_spectrum
 
 def precompute_omega_weights(freqs, tmp_min=2., tmp_max=100., N=20000,chimax=None,inspiralOnly=False,PN=True):
     """
