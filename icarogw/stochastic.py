@@ -3,6 +3,7 @@ import matplotlib.pylab as plt
 import astropy.constants
 from pycbc.waveform import get_fd_waveform
 from icarogw import stochastic
+from tqdm import tqdm
 
 # ----------------------------
 # Constants (SI)
@@ -25,7 +26,7 @@ def v(Mtot,f):
     MsunToSec = astropy.constants.M_sun.value*astropy.constants.G.value/np.power(astropy.constants.c.value,3.)
     return np.array([(np.pi*MsunToSec*f*Mtot)**(1./3.), (np.pi*MsunToSec*f*Mtot)**(2./3.), (np.pi*MsunToSec*f*Mtot)])
 
-def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None,approximant=False):
+def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None,approximant=False, chi1=None, chi2=None, cost1=None, cost2=None):
 
     """
     Function to compute the energy spectrum radiated by a CBC. Taken from (https://ui.adsabs.harvard.edu/abs/2023arXiv231017625T/abstract)
@@ -104,26 +105,29 @@ def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None,approximant=Fal
         if approximant:
             
             APPROXIMANT = "IMRPhenomXPHM"
+
             delta = np.sqrt(1 - 4*eta)
             MASS1 = 0.5 * Mtot * (1 + delta)
             MASS2 = 0.5 * Mtot * (1 - delta)
-            F_LOWER = min(freqs)         # Hz
-            F_FINAL = max(freqs)      # Hz
-            DELTA_F = freqs[1] - freqs[0]  # Hz
 
-            SPIN1X = 0.0
-            SPIN1Y = 0.0
-            SPIN1Z = 0.0
+            F_LOWER = min(freqs)
+            F_FINAL = max(freqs)
+            DELTA_F = freqs[1] - freqs[0]
 
-            SPIN2X = 0.0
-            SPIN2Y = 0.0
-            SPIN2Z = 0.0
+            if chi1 is None:
+                chi1 = 0.0
+            if chi2 is None:
+                chi2 = 0.0
+            if chi1 is None and chi2 is None:
+                chi1, chi2 = 0.0, 0.0
 
-            # Placeholders
-            DISTANCE_MPC = 500.0  # Mpc
-            INCLINATION = 0.0  # radians
+            SPIN1X, SPIN1Y, SPIN1Z = 0.0, 0.0, chi1*cost1
+            SPIN2X, SPIN2Y, SPIN2Z = 0.0, 0.0, chi2*cost2
+
+            DISTANCE_MPC = 500.0
+            INCLINATION = 0.0
             COA_PHASE = 0.0
-            
+
             hp, hc = get_fd_waveform(
                 approximant=APPROXIMANT,
                 mass1=MASS1,
@@ -141,7 +145,6 @@ def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None,approximant=Fal
                 inclination=INCLINATION,
                 coa_phase=COA_PHASE,
             )
-
             hp_arr = hp.numpy()
             hc_arr = hc.numpy()
             
@@ -190,7 +193,7 @@ def dEdf(Mtot,freqs,eta=0.25,inspiralOnly=False,PN=True,chi=None,approximant=Fal
     else:
         return dEdf_spectrum
 
-def precompute_omega_weights(freqs, tmp_min=2., tmp_max=100., N=20000,chimax=None,inspiralOnly=False,PN=True):
+def precompute_omega_weights(freqs, tmp_min=2., tmp_max=100., N=20000,chimax=None,inspiralOnly=False,PN=True, approximant=False):
     """
     Function to precompute the omega weights (adapted from https://ui.adsabs.harvard.edu/abs/2023arXiv231017625T/abstract)
     
@@ -262,7 +265,104 @@ def precompute_omega_weights(freqs, tmp_min=2., tmp_max=100., N=20000,chimax=Non
 
     return look_up_Om0
 
+def precompute_omega_weights_IBH(freqs, N=20000):
+
+    m1s_drawn = np.random.uniform(2., 100., size=N)
+    c_m2s = np.random.uniform(size=N)
+    m2s_drawn = 2. + c_m2s*(m1s_drawn - 2.)
+
+    # sample spins (proposal)
+    chi1_drawn = np.random.uniform(0, 1, size=N)
+    chi2_drawn = np.random.uniform(0, 1, size=N)
+    cost1_drawn = np.random.uniform(-1, 1, size=N)
+    cost2_drawn = np.random.uniform(-1, 1, size=N)
+
+    # proposal pdf
+    p_spin_old = 1.0 * 1.0 * 0.5 * 0.5
+
+    zs_drawn = np.random.uniform(0, 10, size=N)
+
+    dEdfs = np.array([
+    dEdf(
+        m1s_drawn[ii] + m2s_drawn[ii],
+        freqs * (1 + zs_drawn[ii]),
+        eta=m2s_drawn[ii]/m1s_drawn[ii]/(1+m2s_drawn[ii]/m1s_drawn[ii])**2,
+        approximant=True,
+        chi1=chi1_drawn[ii], cost1=cost1_drawn[ii],
+        chi2=chi2_drawn[ii], cost2=cost2_drawn[ii]
+    )
+    for ii in tqdm(range(N), total=N, desc="Computing dEdfs")])
+
+    look_up_Om0 = {
+        'm1s_drawn': m1s_drawn,
+        'm2s_drawn': m2s_drawn,
+        'zs_drawn': zs_drawn,
+        'chi1_drawn': chi1_drawn,
+        'chi2_drawn': chi2_drawn,
+        'cost1_drawn': cost1_drawn,
+        'cost2_drawn': cost2_drawn,
+        'dEdfs': dEdfs,
+        'p_spin_old': p_spin_old*np.ones(N), 
+        'p_m1_old': 1/(100-2)*np.ones(N),
+        'p_m2_old': 1/(m1s_drawn-2),
+        'p_z_old': 1/10*np.ones(N)}
+    return look_up_Om0
+
+
 # Define the log likelihood for the SGWB
+def spectral_siren_vanilla_omega_gw_IBH(freqs,look_up_Om0,cbcrate):
+    import time
+    '''
+    This function calculates the stochastic GW background as function of frequency. Note that this rate is not valid in modified gravity with friction terms
+
+    Parameters
+    ----------
+    freqs: np.array
+        Frequency at which to compute the power spectrum
+    look_up_Om0: np.array
+        Look up table computed with precompute_omega_weights
+    cbcrate: class
+        icarogw cbc rate for the spectral siren analysis
+
+    Returns
+    -------
+    Omega_f: np.array
+        The stochastic GW background
+    '''
+    c= astropy.constants.c.value
+    G= astropy.constants.G.value
+    km= 1.0e3
+    Mpc= astropy.constants.kpc.value*1e3
+    year= 365.*24*3600
+    # Not valid in MG
+    mw = cbcrate.mw
+    rw = cbcrate.rw
+    cw = cbcrate.cw
+    R0 = cbcrate.R0
+    sw = cbcrate.sw # spinprior_IBG
+
+    H0 = cw.cosmology.little_h*100*km/Mpc  
+    rhoC = 3.*np.power(H0*c,2.)/(8.*np.pi*G)*np.power(Mpc,3) 
+    pmw=mw.pdf(look_up_Om0['m1s_drawn'],look_up_Om0['m2s_drawn'])
+    prw=rw.evaluate(look_up_Om0['zs_drawn'])*R0
+    p_rate_new = prw/cw.cosmology.astropy_cosmo.efunc(look_up_Om0['zs_drawn'])/(1.+look_up_Om0['zs_drawn']) 
+    psw = np.array([
+    sw.pdf(c1, c2, ct1, ct2, m1, m2) for c1, c2, ct1, ct2, m1, m2 in zip(
+        look_up_Om0['chi1_drawn'],
+        look_up_Om0['chi2_drawn'],
+        look_up_Om0['cost1_drawn'],
+        look_up_Om0['cost2_drawn'],
+        look_up_Om0['m1s_drawn'],
+        look_up_Om0['m2s_drawn'])])
+
+    #formulae in the appendix
+    w_i = p_rate_new*pmw*psw/(look_up_Om0['p_z_old']*look_up_Om0['p_m1_old']*look_up_Om0['p_m2_old']* look_up_Om0['p_spin_old'])
+    Omega_spectrum_new = np.einsum("if,i->if",look_up_Om0['dEdfs'],w_i)
+    Omega_spectrum_new_avged = 1/rhoC/H0/1e9/year*freqs*np.mean(Omega_spectrum_new, axis=0)  
+ 
+    Omega_f = Omega_spectrum_new_avged
+    return Omega_f
+
 def spectral_siren_vanilla_omega_gw(freqs,look_up_Om0,cbcrate):
     import time
     '''
