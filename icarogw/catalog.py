@@ -834,7 +834,7 @@ class icarogw_catalog(object):
         
         # Baiscally tells that if you are above the maximum interpolation range or below, you detect nothing
         # By definition
-        idx_out = (z>z_grid[-1]) | (z<z_grid[0]) | (z < zsat_eff)
+        idx_out = (z>z_grid[-1]) | (z < zsat_eff)
         Mthr_array[idx_out]=-xp.inf
 
         
