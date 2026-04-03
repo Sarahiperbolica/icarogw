@@ -865,8 +865,6 @@ class icarogw_catalog(object):
                 bgpart=self.sch_fun.background_effective_galaxy_density(Mthr_array,z)*cosmology.dVc_by_dzdOmega_at_z(z)
             else:
                 Msat_array = m2M(xp.array([msat]), cosmology.z2dl(z), 0)
-                Msat_array = m2M(xp.full_like(z, msat), cosmology.z2dl(z), 0)
-                #bgpart = self.sch_fun.background_effective_galaxy_density(Mthr_array,z, Msat=None)*cosmology.dVc_by_dzdOmega_at_z(z)
                 bgpart=xp.where(idx_out, self.sch_fun.background_effective_galaxy_density(Mthr_array,z)*cosmology.dVc_by_dzdOmega_at_z(z), self.sch_fun.background_effective_galaxy_density(Mthr_array,z, Msat_array)*cosmology.dVc_by_dzdOmega_at_z(z))
         
         return gcpart.reshape(originshape),bgpart.reshape(originshape)
