@@ -44,9 +44,9 @@ agroup='ligo.dev.o4.cbc.hubble.icarogw',memory=10000,cpus=1,disk=10000):
             f.write('accounting_group = '+agroup+'\n')
             f.write('accounting_group_user = '+uname)
             f.write('\n')
-            f.write('request_memory ='+str(memory)+'\n')
+            f.write('request_memory ='+str(memory)+'M\n')
             f.write('request_cpus ='+str(cpus)+'\n')
-            f.write('request_disk ='+str(disk)+'\n')    
+            f.write('request_disk ='+str(disk)+'M\n')    
             f.write('output = '+home_folder+fname+'.stdout\n')
             f.write('error = '+home_folder+fname+'.stderr\n')
             f.write('log = '+home_folder+fname+'.log\n')
@@ -426,6 +426,7 @@ agroup='ligo.dev.o4.cbc.hubble.icarogw'):
     fp.write('subgrouping = \'{:s}\' \n'.format(subgrouping))
     fp.write('band = \'{:s}\' \n'.format(band))
     fp.write('epsilon = {:f} \n'.format(epsilon))
+    fp.write('LLstarcut = None \n')
     fp.write('ptype = \'{:s}\' \n'.format(ptype))
 
     
